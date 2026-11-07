@@ -62,6 +62,15 @@ class _FakePlaywright:
         return False
 
 
+@pytest.fixture(autouse=True)
+def _no_gpu_probe(monkeypatch):
+    """The browser is a fake, so camoufox's GPU probe must be one too: it LAUNCHES
+    a real camoufox while the options are drawn (D.REV3), and the default run
+    refuses any launch (tests/support/browser_reaper.py)."""
+    cu = pytest.importorskip("camoufox.utils")
+    monkeypatch.setattr(cu, "host_gpu", lambda *a: None)
+
+
 def test_gui_pov_gets_to_the_browser_without_the_pytest_flag(monkeypatch, tmp_path):
     from tests.support import browser as browser_support
 

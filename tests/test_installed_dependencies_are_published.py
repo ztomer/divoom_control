@@ -26,14 +26,13 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 #: (distribution, RECORD path) -> (the repo module that replaces it at runtime,
-#: the sha256 of the ONE known edit it excuses). fpgen 1.3.0's base85_to_int is
-#: replaced by tests/support/fpgen_compat.py at the launch seam, so the known
-#: in-place edit of that file (`if s == '!': return 0`, found on the dev
-#: machine 2026-11-07) cannot change what the suites run. Any OTHER edit of it
-#: is still red.
-SUPERSEDED = {
-    ("fpgen", "fpgen/unpacker.py"): ("tests/support/fpgen_compat.py", "k_JmTM6whgABihCzuwjzoQ7c8XsqchizbzSGIpU-Hm0"),
-}
+#: the sha256 of the ONE known edit it excuses). Empty: the one entry it held
+#: excused the dev machine's in-place edit of fpgen/unpacker.py
+#: (`if s == '!': return 0`), and that edit is gone -- the published fpgen 1.3.0
+#: was reinstalled and every consumer decodes through a shim (D.REV3,
+#: 2026-11-07). An entry is added only with its reason, and deleted when the
+#: edit it excuses stops existing.
+SUPERSEDED: dict[tuple[str, str], tuple[str, str]] = {}
 
 _NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 

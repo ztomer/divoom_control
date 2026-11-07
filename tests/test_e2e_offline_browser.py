@@ -27,8 +27,8 @@ FONTS_CSS = "https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swa
 
 def test_the_default_launch_is_offline_and_a_networked_one_is_not() -> None:
     """The seam's two directions, without a browser: tests offline, gui_pov networked."""
-    assert launch_options_for(network=False)["proxy"] == OFFLINE_PROXY
-    assert "proxy" not in launch_options_for(network=True)
+    assert launch_options_for(network=False, launching=False)["proxy"] == OFFLINE_PROXY
+    assert "proxy" not in launch_options_for(network=True, launching=False)
 
 
 @pytest.mark.asyncio

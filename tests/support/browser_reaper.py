@@ -307,6 +307,25 @@ class UnreapableBrowser(RuntimeError):
     """A browser was launched whose processes the reaper cannot name."""
 
 
+class BrowserLaunchRefused(RuntimeError):
+    """A browser launch in a run that did not opt in with --run-browser."""
+
+
+#: Whether this run may launch a browser: None outside a pytest session (a
+#: script such as scripts/gui_pov.py is opted in by being run), else the
+#: session's --run-browser (tests/conftest.py). The default run launches
+#: nothing -- a launch there, even a library's own (camoufox's GPU probe,
+#: D.REV3), is refused loudly instead of starting a tree nobody asked for.
+LAUNCH_ALLOWED: bool | None = None
+
+
+def check_launch_allowed() -> None:
+    if LAUNCH_ALLOWED is False:
+        raise BrowserLaunchRefused(
+            "a browser was launched in a run without --run-browser; the default run "
+            "launches nothing (tests/support/browser_reaper.py, D.REV3)")
+
+
 def register_launched() -> list[int]:
     """Give the browser just launched to the current owner.
 
@@ -358,11 +377,13 @@ def _wrap(original):
 
     if inspect.iscoroutinefunction(original):
         async def launch(self, *args, **kwargs):
+            check_launch_allowed()
             browser = await original(self, *args, **kwargs)
             register_launched()
             return browser
     else:
         def launch(self, *args, **kwargs):
+            check_launch_allowed()
             browser = original(self, *args, **kwargs)
             register_launched()
             return browser

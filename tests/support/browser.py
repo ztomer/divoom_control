@@ -163,7 +163,7 @@ async def launch(p, *, opted_in: bool = False, network: bool = False):
     a failed launch is ``BrowserLaunchFailed``."""
     require_browser(opted_in=opted_in)
     if opted_in or network:  # not a test: its own browser, its own run
-        return await launch_async(lambda: p.firefox.launch(**launch_options_for(network=network)))
+        return await launch_async(lambda: p.firefox.launch(**launch_options_for(network=network, launching=True)))
     return await shared_browser()  # one per session, a fresh context each (browser_shared.py)
 
 
@@ -181,7 +181,7 @@ def launch_sync(p):
     guard, so getting a browser now requires passing it by construction.
     """
     require_browser()
-    return launch_blocking(lambda: p.firefox.launch(**launch_options_for(network=False)))
+    return launch_blocking(lambda: p.firefox.launch(**launch_options_for(network=False, launching=True)))
 
 
 # ── Reaching the page's main world ────────────────────────────────────────────

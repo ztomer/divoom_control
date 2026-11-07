@@ -6,6 +6,23 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The default run launches no browser, not even camoufox's GPU probe
+  (D.REV3).** camoufox 0.5.9's `launch_options` launches a whole browser to
+  read the host GPU, and the default run (no `--run-browser`) reads launch
+  options in several tests: sampled 2026-11-07, two probe browsers (seven
+  camoufox processes) during two of those files, plus one per `gui_pov` test.
+  `launch_options_for` now takes a required `launching=`: a read answers the
+  probe with "no GPU" and starts nothing; the three real launch sites pass
+  `launching=True`. The class is closed at the launch seam: in a run without
+  `--run-browser`, any `BrowserType.launch` (a library's own included) raises
+  `BrowserLaunchRefused` before a process starts -- it found the `gui_pov`
+  tests' probe the moment it went in. Full default run: 0 test-home browser
+  processes during or after (was two probe trees per run, each closed by the probe; none persisted after the run).
+  The dev machine's hand-edited `fpgen/unpacker.py` is gone (published 1.3.0
+  reinstalled); the gemini-camoufox driver carries the same shim, and the
+  dependency check's one exemption for that edit is deleted, so the edit is
+  red again if it comes back.
+
 - **Review fixes on D.BLEDBG, D.E2ELAUNCH and D.E2EOS.** `scripts/py_ci.sh`
   no longer swallows a failed BLE-free restore (`|| true`): a green suite
   whose restore fails now fails the run, tested by driving the real script

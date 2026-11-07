@@ -162,7 +162,7 @@ async def _start_async(loop) -> _AsyncHost:
         playwright = await async_playwright().start()
         try:
             browser = await launch_async(
-                lambda: playwright.firefox.launch(**launch_options_for(network=False)))
+                lambda: playwright.firefox.launch(**launch_options_for(network=False, launching=True)))
         except BaseException:
             await playwright.stop()
             raise

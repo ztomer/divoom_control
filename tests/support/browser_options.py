@@ -6,7 +6,9 @@ under the house line cap.
 
 from __future__ import annotations
 
+import contextlib
 import platform
+import threading
 
 #: Where a test browser's off-machine requests go: a closed local port, so they
 #: fail in milliseconds. index.html links Google Fonts, and `page.goto` waits for
@@ -51,7 +53,37 @@ def fingerprint_os() -> str:
     return _HOST_OS[host]
 
 
-def launch_options_for(*, network: bool) -> dict:
+#: Held while the GPU probe is answered without a browser: the answer is a
+#: module global of camoufox's, so two reads must not interleave.
+_PROBE_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def _gpu_probe(*, launching: bool):
+    """camoufox 0.5.9's ``launch_options`` LAUNCHES A BROWSER to read the host
+    GPU (``host_rendering._host_gpu``) whenever the drawn OS is the host's --
+    always, here. That is right before a launch (the identity claims the GPU
+    the pixels come from) and pure cost before a read: the default run reads
+    options without launching anything, and each read started a camoufox tree
+    (D.REV3; tests/test_default_run_launches_no_browser.py). A read answers
+    the probe with "no GPU", which only the WebGL identity depends on."""
+    import camoufox.utils as cu
+
+    with _PROBE_LOCK:
+        if launching:
+            yield
+            return
+        probe = cu.host_gpu
+        cu.host_gpu = lambda *a: None
+        try:
+            yield
+        finally:
+            cu.host_gpu = probe
+
+
+def launch_options_for(*, network: bool, launching: bool) -> dict:
+    """The e2e browser's launch options. ``launching``: these options start a
+    browser now (the GPU probe runs); False for a read, which starts nothing."""
     from camoufox.utils import launch_options
 
     from tests.support import fpgen_compat
@@ -69,8 +101,9 @@ def launch_options_for(*, network: bool) -> dict:
     # unless the host's GPU is one fpgen records -- true of this Mac, false of
     # CI's macOS VM ("Apple Paravirtual device"), where seven pixel tests read
     # noise (run 42406876821). A test browser has no fingerprint to protect.
-    opts = launch_options(headless=True, main_world_eval=True, config=HARNESS_GEOMETRY,
-                          os=fingerprint_os(), canvas_noise=False, i_know_what_im_doing=True)
+    with _gpu_probe(launching=launching):
+        opts = launch_options(headless=True, main_world_eval=True, config=HARNESS_GEOMETRY,
+                              os=fingerprint_os(), canvas_noise=False, i_know_what_im_doing=True)
     if not network:
         opts["proxy"] = OFFLINE_PROXY
     return opts

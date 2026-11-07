@@ -72,5 +72,5 @@ def test_the_launch_seam_installs_the_shim() -> None:
     from tests.support.browser_options import launch_options_for
 
     unpacker.base85_to_int = lambda s: (_ for _ in ()).throw(AssertionError("unshimmed"))
-    launch_options_for(network=False)
+    launch_options_for(network=False, launching=False)
     assert unpacker.base85_to_int is fpgen_compat.decode_index

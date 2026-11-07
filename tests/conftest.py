@@ -184,6 +184,7 @@ def pytest_configure(config):
     from tests.support import browser_reaper
 
     browser_reaper.patch_launch()
+    browser_reaper.LAUNCH_ALLOWED = browser_support.RUN_BROWSER
     if not config.pluginmanager.has_plugin("divoom-browser-reaper"):
         config.pluginmanager.register(browser_reaper.ReaperPlugin(), "divoom-browser-reaper")
 
