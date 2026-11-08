@@ -40,13 +40,15 @@ if [ "${DIVOOM_SKIP_LINUX_CHECK:-}" = "1" ]; then
     warn "[linux] SKIPPED by DIVOOM_SKIP_LINUX_CHECK=1 — CI's Linux lint is unchecked here"
     exit 0
 fi
-missing=""
-command -v cargo-zigbuild >/dev/null 2>&1 || missing+=" cargo-zigbuild"
-command -v zig >/dev/null 2>&1 || missing+=" zig"
+# An array: tui/lib.sh's require_commands keeps its own `missing` as one, and a string under the same
+# name reads to shellcheck -x as an array flattened (SC2178/SC2128/SC2179).
+need=()
+command -v cargo-zigbuild >/dev/null 2>&1 || need+=("cargo-zigbuild")
+command -v zig >/dev/null 2>&1 || need+=("zig")
 grep -qx "$TARGET" <<<"$(rustup target list --installed 2>/dev/null)" \
-    || missing+=" rust-target:$TARGET (rustup target add $TARGET)"
-if [ -n "$missing" ]; then
-    printf '✗ [linux] cannot cross-check, missing:%s\n' "$missing" >&2
+    || need+=("rust-target:$TARGET (rustup target add $TARGET)")
+if [ "${#need[@]}" -gt 0 ]; then
+    printf '✗ [linux] cannot cross-check, missing: %s\n' "${need[*]}" >&2
     exit 1
 fi
 

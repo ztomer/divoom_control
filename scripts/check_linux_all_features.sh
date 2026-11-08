@@ -63,10 +63,8 @@ if [ "${DIVOOM_SKIP_LINUX_ALL_FEATURES:-}" = "1" ]; then
     exit 0
 fi
 
-missing=""
-command -v docker >/dev/null 2>&1 || missing+=" docker"
-if [ -n "$missing" ]; then
-    printf '✗ [linux-all-features] cannot run, missing:%s\n' "$missing" >&2
+if ! command -v docker >/dev/null 2>&1; then
+    printf '✗ [linux-all-features] cannot run, missing: docker\n' >&2
     printf '  This gate IS CI'"'"'s Linux --all-features lint. Install Docker, or\n' >&2
     printf '  type DIVOOM_SKIP_LINUX_ALL_FEATURES=1 to skip it loudly.\n' >&2
     exit 1
