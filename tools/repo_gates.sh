@@ -29,7 +29,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GOH="${GOH_DIR:-${GOH:-$HOME/Projects/gates_of_heck}}"
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+# shellcheck source=/dev/null # goh's tui/lib.sh: outside this repo; gates_of_heck lints it
 source "$GOH/tui/lib.sh"
 
 # Recursion guard. Nothing in GOH_CI_STEPS calls back into gate.sh today, but a

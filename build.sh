@@ -23,7 +23,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$ROOT/scripts/lib/platform_gate.sh"
 divoom_platform_gate core "builds the cross-platform daemon core (divoomd)"
 
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+# shellcheck source=/dev/null # goh's tui/lib.sh: outside this repo; gates_of_heck lints it
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 source "$GOH/tui/lib.sh"
 cd "$ROOT"

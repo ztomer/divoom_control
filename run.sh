@@ -15,7 +15,7 @@
 # Socket defaults to /tmp/divoom.sock; override with DIVOOM_SOCKET.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+# shellcheck source=/dev/null # goh's tui/lib.sh: outside this repo; gates_of_heck lints it
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 source "$GOH/tui/lib.sh"
 cd "$ROOT"

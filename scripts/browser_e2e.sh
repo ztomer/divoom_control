@@ -16,7 +16,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+# shellcheck source=/dev/null # goh's tui/lib.sh: outside this repo; gates_of_heck lints it
 source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 
 python3 tools/camoufox_installed.py --install || die "the browser suites need the pinned camoufox build (above)"

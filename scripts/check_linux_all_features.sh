@@ -76,7 +76,7 @@ fi
 # running on it (owner ruling OW.27, 2026-10-31). The seam is goh's
 # lib/container_runtime.sh (GOH.CR1), which takes the colima binary from `COLIMA`
 # (the stub the test drives).
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/lib/container_runtime.sh
+# shellcheck source=/dev/null # goh's lib/container_runtime.sh: outside this repo; gates_of_heck lints it
 . "$GOH/lib/container_runtime.sh"
 trap goh_container_runtime_down EXIT
 if ! goh_container_runtime_up "divoom linux-all-features"; then
