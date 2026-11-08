@@ -41,6 +41,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ztomer/gates_of_heck
+          ref: v0.71.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
       # goh's tool floors (python3, shellcheck), met the ONE way goh provides:
@@ -161,6 +162,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ztomer/gates_of_heck
+          ref: v0.71.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
 
@@ -321,6 +323,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ztomer/gates_of_heck
+          ref: v0.71.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
           path: goh
           token: ${{ secrets.GOH_TOKEN || github.token }}
       # goh's tool floors (python3, shellcheck), met the ONE way goh provides:
