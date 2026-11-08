@@ -108,8 +108,14 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "  which does not include them. Commit or stash first, or press Ctrl-C." >&2
   sleep 3
 fi
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-[ "$BRANCH" = "main" ] || echo "⚠ tagging from branch '${BRANCH}', not main (the tag captures HEAD regardless)."
+# The tagged commit must be HEAD of local main AND on origin/main (D.RELTAG): a hard
+# refusal, never a warning. DIVOOM_RELEASE_GATE_ONLY stops here, for the tests.
+# shellcheck source=/dev/null # goh's tui/lib.sh: outside this repo; gates_of_heck lints it
+. "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
+# shellcheck source=scripts/lib/release_branch_gate.sh
+. "$ROOT/scripts/lib/release_branch_gate.sh"
+divoom_release_branch_gate
+[ -z "${DIVOOM_RELEASE_GATE_ONLY:-}" ] || exit 0
 
 # Dry-run the push gate's tag check NOW, before the CI wait and the build. The
 # pre-push hook refuses a tag whose commit declares no matching version, and it

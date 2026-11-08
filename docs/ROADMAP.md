@@ -32,7 +32,7 @@ was re-read against that tree in the 2026-11-08 rework (owner: "rework,
 rephase, harden the roadmaps"); its commit lists what was pruned and why.
 
 **Umbrella queue ids** (`~/Projects/ROADMAP-consolidated.md`) that map here:
-D.RELTAG -> P1.26; D3 -> P5.16; OW.89 -> P6.1 and P6.2; OW.46 -> P4.8;
+D3 -> P5.16; OW.89 -> P6.1 and P6.2; OW.46 -> P4.8;
 RS.DV -> P1.25; WG.5 (under WG.7) -> P9.12; WG.LIGHTDARK -> P9.13. Each entry
 also names its queue id as `(queue: <ID>)`.
 
@@ -50,16 +50,6 @@ needs data to arrive; Stage 5 needs another project to move first.
 CI, releases tag only main, the dependency graph current, and the per-panel
 model finished. **Exit:** every Stage 1 item deleted. The divoom gate runs 8
 camoufox browsers (~8 GB): run it once per landing, never in a loop.
-
-#### P1.26 — A release tag can only name a commit on main (queue: D.RELTAG)
-**Status:** OPEN
-**Why:** `scripts/release.sh` (the `BRANCH=` line, about line 112) only WARNS
-when HEAD is not `main` and then tags HEAD anyway, so a release tag can name a
-commit that is not on origin's main.
-**Done when:** `scripts/release.sh` exits non-zero before tagging when HEAD is
-not `main` or is not contained in `origin/main`, and a test that runs it on a
-side branch (with the `gh`/push steps stubbed) is watched red on today's
-script, then green.
 
 #### P1.23 — The dependency graph is current
 **Status:** OPEN
