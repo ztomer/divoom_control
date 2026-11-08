@@ -181,29 +181,29 @@ class Divoom(ConnectionCompatMixin):
     # ── Backward Compatible Utility Methods (Mock targets & internal helpers) ────
 
     def _int2hexlittle(self, value: int) -> str:
-        from divoom_lib import framing
+        from divoom_legacy import wire
 
-        return framing.int2hexlittle(value)
+        return wire.int2hexlittle(value)
 
     def _escape_payload(self, payload_bytes: list) -> list:
-        from divoom_lib import framing
+        from divoom_legacy import wire
 
-        return framing.escape_payload(payload_bytes)
+        return wire.escape_payload(payload_bytes)
 
     def _getCRC(self, data_bytes: list) -> str:
-        from divoom_lib import framing
+        from divoom_legacy import wire
 
-        return framing.get_checksum(data_bytes)
+        return wire.get_checksum(data_bytes)
 
     def _make_message(self, payload_bytes: list) -> bytes:
-        from divoom_lib import framing
+        from divoom_legacy import wire
 
-        return framing.encode_basic_payload(payload_bytes, escape=self.escapePayload)
+        return wire.encode_basic_payload(payload_bytes, escape=self.escapePayload)
 
     def _make_message_ios_le(self, payload_bytes: list, packet_number: int = 0x00000000) -> bytes:
-        from divoom_lib import framing
+        from divoom_legacy import wire
 
-        return framing.encode_ios_le_payload(payload_bytes, packet_number=packet_number)
+        return wire.encode_ios_le_payload(payload_bytes, packet_number=packet_number)
 
     def _handle_ios_le_notification(self, data: bytes) -> bool:
         return self._conn._handle_ios_le_notification(data)

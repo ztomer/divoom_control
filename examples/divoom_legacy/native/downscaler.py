@@ -38,9 +38,9 @@ _lib_load_error: str | None = None
 # The dylib lives in divoom_lib/ (R17): it bundles native_src/compact.c with
 # native_src/downsample.c (LANCZOS3) into one shared library.
 # native_lib.library_path() resolves the per-platform name (.dylib/.so/.dll).
-from divoom_lib.native_lib import library_path
-
-_DYLIB_PATH = library_path()
+# divoom_lib.native_lib was deleted with the C library (L4, 2026-09-25); this
+# names the dylib's old home, which is now always absent, so the fallback runs.
+_DYLIB_PATH = Path(__file__).resolve().parents[3] / "divoom_lib" / "libdivoom_compact.dylib"
 
 
 def _load_lib():

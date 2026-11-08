@@ -7,7 +7,8 @@ import os
 from typing import Optional, Any
 from bleak.exc import BleakError
 
-from divoom_lib import models, framing
+from divoom_lib import models
+from divoom_legacy import wire
 from divoom_legacy.ble_notify import BleNotifyMixin
 from divoom_lib.transport_interface import DeviceTransport
 from divoom_lib.exceptions import DeviceAddressMissingError, CharacteristicConfigError, DeviceConnectionError
@@ -369,7 +370,7 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             self._connection_likely_broken = True
 
     async def _send_ios_le_payload(self, payload_bytes: list, write_with_response: bool) -> bool:
-        message_bytes = framing.encode_ios_le_payload(payload_bytes)
+        message_bytes = wire.encode_ios_le_payload(payload_bytes)
         try:
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug("PAYLOAD OUT (iOS LE): %s", message_bytes.hex())
@@ -383,7 +384,7 @@ class BLETransport(BleNotifyMixin, DeviceTransport):
             return False
 
     async def _send_basic_protocol_payload(self, payload_bytes: list, write_with_response: bool) -> bool:
-        full_message = framing.encode_basic_payload(payload_bytes, escape=self.escapePayload)
+        full_message = wire.encode_basic_payload(payload_bytes, escape=self.escapePayload)
         chunk_size = models.DEFAULT_CHUNK_SIZE
 
         if len(full_message) > chunk_size:

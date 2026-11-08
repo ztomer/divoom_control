@@ -6,6 +6,22 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The retired library sends again, and examples/ cannot name a dead
+  divoom_lib attribute (D.LEGACY).** L4c (`ae43751`) removed the Python
+  encoder from `divoom_lib/framing.py`, but `examples/divoom_legacy` still
+  called `framing.encode_ios_le_payload`/`encode_basic_payload`/`int2hexlittle`/
+  `escape_payload`/`get_checksum`, so every live send and every text/animation
+  payload raised AttributeError. Evidence for restore over delete: the example
+  scripts, `examples/tests` (run by `scripts/py_ci.sh`) and the device_call
+  parity spec all drive that facade. The library now frames through its own
+  `divoom_legacy/wire.py` (outside the wheel, so the shipped-package gate is
+  untouched), asserted against all 550 recorded C vectors and driven through a
+  fake BLE client (4 red before the fix). The new class gate
+  `tests/test_examples_divoom_lib_refs.py` (ast, no import) was red on 10
+  references, including three siblings on the deleted `divoom_lib.native_lib`
+  that made `divoom_legacy.native` and `media_decoder` unimportable; those now
+  name the dylib's old, always-absent path so their documented fallbacks run.
+
 - **A skip that says "not implemented" is checked, and the new-page budget is CPU, not wall
   (D.SKIPS).** Fifteen tests in `examples/tests/test_divoom.py` were skipped as "Method X not
   implemented in Divoom class" while every X existed on `Divoom`: the fixture patched the

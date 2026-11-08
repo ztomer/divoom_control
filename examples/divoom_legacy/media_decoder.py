@@ -3,14 +3,13 @@ import logging
 from pathlib import Path
 import ctypes
 
-from divoom_lib.native_lib import library_path
 
 logger = logging.getLogger("divoom_gui")
 
 # Dynamically load native C shared library for fast pixel tile compacting
 lib = None
 try:
-    lib_path = library_path()
+    lib_path = Path(__file__).resolve().parents[2] / "divoom_lib" / "libdivoom_compact.dylib"
     if lib_path.exists():
         lib = ctypes.CDLL(str(lib_path))
         lib.compact_tiles.argtypes = [

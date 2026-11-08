@@ -4,8 +4,8 @@ divoom_legacy.native — performance-sensitive native code exposed to Python.
 The three C sources that make up libdivoom_compact.dylib:
 
   - `divoom_lib/native_src/compact.c`              — tile-compacting and protocol-framing
-                                   (encode_basic_payload, encode_ios_le_payload,
-                                    compact_tiles). Used by `divoom_lib.framing`
+                                   (the framing pair, now `divoom_legacy.wire`, and
+                                    compact_tiles). Was used by `divoom_lib.framing`
                                    and the GUI's media decoder.
 
   - `divoom_lib/native_src/downsample.c` — LANCZOS3 image downscaler

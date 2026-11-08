@@ -436,6 +436,18 @@ rule: byte-equal first, then the Python goes.)
   the one you remember: v0.40.0 missed the archived `examples/tests/` suite and
   the callers that EXECUTE things (CI workflows, the Linux host, `build.sh`).
   `tools/check_scripts.py` check 4 gates the second class.
+- **A test that cannot reach its subject is a skip that lies.** A fixture that
+  patched a subclass no instance ever became left 15 legacy tests skipped as "not
+  implemented" while the methods existed (D.SKIPS, `38e9d7c`);
+  `tests/test_no_stale_not_implemented_skip.py` fails any such skip whose named
+  method exists.
+- **A name removed from a shipped package is removed for every caller, shipped
+  or not.** L4c took the Python encoder out of `divoom_lib/framing.py` and the
+  retired library kept calling it, so every live legacy send raised
+  AttributeError behind mocked tests (D.LEGACY). The legacy library now frames
+  through `examples/divoom_legacy/wire.py`, held to the C's recorded vectors by
+  `examples/tests/test_legacy_wire.py`, and `tests/test_examples_divoom_lib_refs.py`
+  resolves every `divoom_lib` name under `examples/` statically.
 - **`examples/` is a spec, not dead weight.** `examples/divoom_legacy/` is the
   only executable oracle for the daemon's `device_call` arms
   (`examples/tests/test_device_call_parity.py`, `tools/check_positional_args.py`).
