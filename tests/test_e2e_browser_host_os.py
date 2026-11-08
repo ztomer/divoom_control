@@ -19,9 +19,9 @@ from __future__ import annotations
 import platform
 import subprocess
 import sys
-import time
 from pathlib import Path
 
+import psutil
 import pytest
 
 from tests.support.browser import launch
@@ -98,10 +98,33 @@ def test_every_process_draws_the_hosts_os() -> None:
     assert got == [want] * PROCESSES, f"fingerprint platforms {got}, host {want}"
 
 
+def _tree_cpu() -> float:
+    """CPU seconds (user + system) spent so far by this process and every descendant,
+    which includes the browser playwright launched. Descendants that exit mid-read are
+    skipped: a page open does not end a content process."""
+    me = psutil.Process()
+    total = 0.0
+    for proc in [me, *me.children(recursive=True)]:
+        try:
+            t = proc.cpu_times()
+        except psutil.Error:
+            continue
+        total += t.user + t.system
+    return total
+
+
+#: CPU seconds a warm ``new_page`` may spend across the process tree. Measured
+#: 2026-11-07 on this Mac: host fingerprint 0.32-0.68 s, Windows fingerprint
+#: 3.5-5.0 s. CPU time, not wall time, because wall time is a function of machine
+#: load: the old 1.0 s wall budget read 1.2 s at load average 56 on a healthy
+#: browser and refused a push, while CPU time is what the page open itself costs.
+CPU_BUDGET_S = 1.5
+
+
 @pytest.mark.asyncio
 async def test_a_new_page_is_cheap() -> None:
-    """The effect, not only the setting: a warm browser opens a page in well under a second
-    (2.5-2.6 s each with a foreign-OS fingerprint, 0.12-0.16 s with the host's)."""
+    """The effect, not only the setting: a warm browser opens a page cheaply
+    (3.5-5.0 CPU-s each with a foreign-OS fingerprint, 0.3-0.7 with the host's)."""
     async with async_playwright() as p:
         browser = await launch(p)
         try:
@@ -109,9 +132,9 @@ async def test_a_new_page_is_cheap() -> None:
             await context.new_page()  # the first page also starts the content process
             costs = []
             for _ in range(3):
-                start = time.monotonic()
+                start = _tree_cpu()
                 await context.new_page()
-                costs.append(time.monotonic() - start)
+                costs.append(_tree_cpu() - start)
         finally:
             await browser.close()
-    assert sorted(costs)[1] < 1.0, f"new_page took {[round(c, 2) for c in costs]} s"
+    assert sorted(costs)[1] < CPU_BUDGET_S, f"new_page cost {[round(c, 2) for c in costs]} CPU-s"

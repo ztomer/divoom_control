@@ -89,6 +89,8 @@ test = [
 e2e = [
     "playwright",
     "camoufox==0.5.9",
+    # test_a_new_page_is_cheap budgets the browser tree's CPU time, not wall time.
+    "psutil",
 ]
 dev = [
     "divoom-control[gui,test]",

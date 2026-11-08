@@ -36,6 +36,7 @@ REPO_ROOT = Path(__file__).parent.parent
 ALLOWED_ONE_SIDED: dict[str, str] = {
     "playwright": "the [e2e] extra; CI installs the extra, not requirements.txt",
     "camoufox": "the [e2e] extra; the pinned browser driver for the e2e suites",
+    "psutil": "the [e2e] extra; test_a_new_page_is_cheap reads the browser tree's CPU time",
 }
 
 
@@ -270,7 +271,7 @@ def test_browser_driver_declared_in_the_extra_not_literal_in_ci() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     e2e = data["project"].get("optional-dependencies", {}).get("e2e", [])
     declared = {_pkg_name(s) for s in e2e}
-    assert declared == {"playwright", "camoufox"}, (
+    assert {"playwright", "camoufox"} <= declared, (
         f"the [e2e] extra must declare playwright + camoufox, got {sorted(declared)}"
     )
     camoufox_spec = next(s for s in e2e if _pkg_name(s) == "camoufox")

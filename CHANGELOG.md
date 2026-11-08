@@ -6,6 +6,19 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A skip that says "not implemented" is checked, and the new-page budget is CPU, not wall
+  (D.SKIPS).** Fifteen tests in `examples/tests/test_divoom.py` were skipped as "Method X not
+  implemented in Divoom class" while every X existed on `Divoom`: the fixture patched the
+  `DivoomProtocol` subclass, which never reaches a `Divoom` instance, so the probing tests saw
+  the live send path. The fixture now patches `Divoom`, a `real_divoom_instance` fixture serves
+  the two tests of the real send methods, and all fifteen pass unchanged in their assertions.
+  `tests/test_no_stale_not_implemented_skip.py` closes the class: a "not implemented" skip
+  anywhere in the tree must name `Method <m> ... in <C> class` and `C` must lack `m` (red on
+  the old file: 15 stale). `test_a_new_page_is_cheap` measured 1.2 s against a 1.0 s wall
+  budget at load 56 on a healthy browser; it now budgets the process tree's CPU time
+  (1.5 CPU-s; host fingerprint 0.3-0.7, Windows 3.0-6.0), the same verdict idle and under 30
+  spinners. `psutil` joins the `e2e` extra.
+
 - **A link failure is the LINK's, and the link-drop stress test is ordered
   by an event (D.LINKDROP).** CI run 42413546443 (a docs-only commit) failed
   `a_link_drop_keeps_the_widget_and_a_reconnect_resumes_it_cleanly` with a
