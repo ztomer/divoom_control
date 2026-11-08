@@ -2,7 +2,7 @@
 
 The ONE forward-looking document (`AGENTS.md`). It holds what is not done yet,
 in the order it should be done, the owner's rulings, and the standing rules new
-work must respect. What shipped is in `CHANGELOG.md`. Closed narrative --
+work must respect. What has landed is in `CHANGELOG.md`. Closed narrative --
 every "Landed" paragraph, the Phase 0-6 histories and the release table -- is
 in git history: the last full version before the 2026-11-07 rework is
 `git show 1c13851:docs/ROADMAP.md`, and the one before the 2026-10-14
@@ -23,18 +23,22 @@ cite it still resolve; the stage it sits in is where it is worked. Statuses:
 
 `tests/test_roadmap_shape.py` enforces that shape: every item has a status and a
 **Done when**, no dependency points at a later phase id, and every repo path
-cited anywhere in this file exists. Shipped items are deleted from the Plan, not
-marked SHIPPED -- that marker is refused.
+cited anywhere in this file exists. Landed items are deleted from the Plan, never
+given a done marker -- that marker is refused.
 
-**Premises checked 2026-11-07** at `593408f` (local main, one commit ahead of
-`origin/main` at `6372678`): the newest tag is `v0.45.0`, the installed app
-reports `0.45.0`, and the Homebrew cask is `0.45.0` (tap `f001d4b`). Every
-item below was re-read against that tree; the evidence for each change is in
-the commit that made this rework.
+**Premises re-checked 2026-11-08** at `e810789` (CI checks out gates_of_heck
+at release v0.71.0, CI.PUBLIC): the newest tag is `v0.45.0`. Every item below
+was re-read against that tree in the 2026-11-08 rework (owner: "rework,
+rephase, harden the roadmaps"); its commit lists what was pruned and why.
 
 **Umbrella queue ids** (`~/Projects/ROADMAP-consolidated.md`) that map here:
-D3 -> P5.16; D7 -> P6.1; D8 -> P6.2; OW.46 -> P4.8; RS.DV -> P1.25;
-WG.5 and WG.7 -> P9.12; WG.LIGHTDARK -> P9.13.
+D.RELTAG -> P1.26; D3 -> P5.16; OW.89 -> P6.1 and P6.2; OW.46 -> P4.8;
+RS.DV -> P1.25; WG.5 (under WG.7) -> P9.12; WG.LIGHTDARK -> P9.13. Each entry
+also names its queue id as `(queue: <ID>)`.
+
+**Phase order** (dependency first, then value): Stage 1 needs only an agent;
+Stage 2 needs the owner's hands, eyes or call; Stage 3 needs hardware; Stage 4
+needs data to arrive; Stage 5 needs another project to move first.
 
 ---
 
@@ -42,9 +46,20 @@ WG.5 and WG.7 -> P9.12; WG.LIGHTDARK -> P9.13.
 
 ### Stage 1 — agent-runnable, in execution order
 
-**Goal:** main green in CI, the dependency graph current, and the per-panel
+**Why first:** nothing outside the agent blocks it. **Goal:** main green in
+CI, releases tag only main, the dependency graph current, and the per-panel
 model finished. **Exit:** every Stage 1 item deleted. The divoom gate runs 8
 camoufox browsers (~8 GB): run it once per landing, never in a loop.
+
+#### P1.26 — A release tag can only name a commit on main (queue: D.RELTAG)
+**Status:** OPEN
+**Why:** `scripts/release.sh` (the `BRANCH=` line, about line 112) only WARNS
+when HEAD is not `main` and then tags HEAD anyway, so a release tag can name a
+commit that is not on origin's main.
+**Done when:** `scripts/release.sh` exits non-zero before tagging when HEAD is
+not `main` or is not contained in `origin/main`, and a test that runs it on a
+side branch (with the `gh`/push steps stubbed) is watched red on today's
+script, then green.
 
 #### P1.23 — The dependency graph is current
 **Status:** OPEN
@@ -91,7 +106,7 @@ shows natively (the reply counting what it left out, as `fetch_gallery`'s
 `not_native` does), or is recorded here as device-type-scoped by the cloud
 with the evidence; a mock-panel test per command, 16x16 and 64x64.
 
-#### P1.25 — The protocol core and the CLI in Rust (umbrella RS.DV)
+#### P1.25 — The protocol core and the CLI in Rust (queue: RS.DV)
 **Status:** OPEN
 **Why:** the owner put it on the roadmap ("add 1-5, 7 to the roadmap. old
 phones runs once per device, speed is not an issue"): packet framing,
@@ -109,7 +124,10 @@ hardware or CLI path except the SPP co-process; released and installed.
 
 ### Stage 2 — owner-gated (the owner's hands, eyes or call)
 
-#### P5.16 — The menubar's menu held open through a fleet change, on screen (umbrella D3)
+**Why second:** each item is ready the moment the owner acts; no code waits on
+hardware or another project.
+
+#### P5.16 — The menubar's menu held open through a fleet change, on screen (queue: D3)
 **Status:** BLOCKED (on a session that may take the screen)
 **Why:** P5.3 updates rows in place and rebuilds only when the set of rows
 changes (`divoom-menubar/src/menu_model.rs`); the model half is unit-tested
@@ -127,8 +145,8 @@ moves the active panel and a row renames over the socket, and two captures
 show the check and the name change in the open menu with no close/reopen,
 light and dark; or the defects found are filed.
 
-#### P6.1 — Snap adjacent panels into one surface: the hardware check (umbrella D7)
-**Status:** DECISION (owner)
+#### P6.1 — Snap adjacent panels into one surface: the hardware check (queue: OW.89)
+**Status:** DECISION (owner, OW.89 open)
 **Why:** council 2026-11-07, `docs/council-p6.md` (the facts, five personas,
 the measurements and decisions 1-4). The daemon's cut is exact in PIXELS
 (2026-10-20, Pixoo-1 + Timoo-light-4, 0 of 256 off per half), but the glass
@@ -143,13 +161,14 @@ pictures on a physical canvas cut at each SCREEN rectangle, pixel art only
 across equal pitches, still images only until drift is measured, a dropped
 panel marked and re-sent on relink. Before any code, the owner measures M1
 (each family's screen rectangle, a ruler) and M2-M5 on the proving pair.
-**Done when:** the owner has answered decisions 1-4 of `docs/council-p6.md`
-and M1 is recorded there; then the screen rectangle is in `FAMILIES`, the
-free-form cut uses it (a test watched red on today's chassis cut), and a
-photograph of the proving pair shows one picture across the seam (M5).
+**Done when:** (owner to decide) -- OW.89, decisions 1-4 of
+`docs/council-p6.md`, is undecided. The council's proposed exit, for the owner
+to accept or replace: M1 recorded there, the screen rectangle in `FAMILIES`,
+the free-form cut using it (a test watched red on today's chassis cut), and a
+photograph of the proving pair showing one picture across the seam (M5).
 
-#### P6.2 — A panel on Wi-Fi as a wall slot (umbrella D8)
-**Status:** DECISION (owner)
+#### P6.2 — A panel on Wi-Fi as a wall slot (queue: OW.89)
+**Status:** DECISION (owner, OW.89 open)
 **Why:** council 2026-11-07, `docs/council-p6.md` (decisions 5-6). The
 premise this row carried until today was false: the Timoo and the Tivoo-Max
 are Bluetooth-architecture models, not Wi-Fi ones -- the vendor app puts only
@@ -165,9 +184,11 @@ says exactly that (`divoomd/src/wall/refusal.rs`). Recommended: "Not planned"
 until a Wi-Fi panel is in the house (a Pixoo-64 would also serve P4.8); with
 one, probe both routes read-only, draw on it alone, then admit it as a still
 slot.
-**Done when:** the owner has answered decision 5 (acquire a Wi-Fi panel, or
-this row moves to Not planned); with a panel, a Wi-Fi image command draws on
-it, the daemon draws a slot over it, and the refusal is deleted.
+**Done when:** (owner to decide) -- OW.89, decisions 5-6 of
+`docs/council-p6.md`, is undecided (acquire a Wi-Fi panel, or this row is
+deleted as not planned). With a panel, the council's proposed exit: a Wi-Fi
+image command draws on it, the daemon draws a slot over it, and the refusal in
+`divoomd/src/wall/refusal.rs` is deleted.
 
 #### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)
@@ -180,21 +201,9 @@ Sync Now"), so the difference is visible, not solved.
 panel's Hot pull, or the stored Recommend push) or kept both, recorded here
 with the date.
 
-#### P9.13 — Each widget follows light and dark and magnetises to the Dock (umbrella WG.LIGHTDARK)
-**Status:** DECISION (owner)
-**Why:** the owner asked for it on the roadmaps and NOT built now: "it should
-be possible to magnetize the spaces to the dock. routines mascot (and all the
-other widgets) should respect light/ dark mode, and should be able to
-magnetize to the dock as well. do not implement now, just add to the
-roadmaps". The umbrella holds it behind OW.86 ("Say go when you want them
-built") and ZoneWM's ZW.DOCKMAG; divoom's widget is P9.12's.
-**Done when:** the owner says go, and then: a both-appearance render test of
-the divoom preview widget watched red first, and the installed widget read
-in Light and Dark docked to the SpaceBar and to the Dock.
-
 ### Stage 3 — hardware-gated (a panel, a capture, or a trace)
 
-#### P4.8 — Phase 4's hardware half: a 64x64 Bluetooth panel runs the lease (umbrella OW.46)
+#### P4.8 — Phase 4's hardware half: a 64x64 Bluetooth panel runs the lease (queue: OW.46)
 **Status:** BLOCKED (on a 64x64 panel linked over Bluetooth or SPP; the bench's four are 16x16)
 **Why:** Phase 4's exit is green against the real `divoomd mcp` entry point
 with a mock 64x64 panel (`divoomd/tests/mcp_lease_e2e.rs` decodes the 0x8B
@@ -220,8 +229,11 @@ this item records why no 64x64 Bluetooth panel is in view.
 other cloud calls in the same minute succeed. Guessing field names is ruled out.
 `scripts/hw_verify.py` carries it as an XFAIL canary that reports XPASS if the
 server starts answering.
-**Done when:** a capture shows the request the server accepts, or the feature
-is removed.
+**Done when:** a capture of the official app's city search is replayed by
+`divoomd` and `scripts/hw_verify.py` reports the `search_weather_city` canary
+XPASS (then the XFAIL is turned into a check); or the command is deleted from
+the daemon, the GUI and the MCP list, and `tools/check_hw_verify_methods.py`
+passes with the canary gone.
 
 #### P9.2 — Scrolling text has no GUI
 **Status:** BLOCKED (on a panel that acks 0x7C)
@@ -229,7 +241,9 @@ is removed.
 Tivoo-Max acked nothing for 0x6E/0x7C/0x86 while the bytes were proven correct.
 The GUI Text channel pushes a static image and ignores its speed/effect
 arguments (`divoom_gui/api/lighting.py`).
-**Done when:** a device acks 0x7C in a trace, then a GUI control is wired.
+**Done when:** a `DIVOOMD_BLE_DEBUG` trace shows a panel echo `0x7C`, and the
+GUI Text channel sends the marquee with its speed and effect (a GUI test asserts
+the request carries both, watched red on today's static-image path).
 
 #### P9.6 — The June 2026 hardware deferrals, re-checked on the Rust daemon
 **Status:** BLOCKED (on a hardware session with an SPP panel and the 4-panel rig)
@@ -238,11 +252,14 @@ never re-checked after the port: (a) SPP framing vs BLE (escaping, packet
 number, write pacing, response-timeout clearing) now that
 `divoom_client/spp_bridge.py` carries bytes the daemon frames; (b) a 0x8B
 retransmit request arriving in the re-arm window of the animation stream
-(`divoomd/src/ble.rs` phase 3); (c) a custom-art ACK treated as success while
-no read-back exists (`divoomd/src/device_call/animation.rs`; P9.10).
-**Done when:** each of (a)-(c) has a `DIVOOMD_BLE_DEBUG` trace read with the
-A/B rule (Hardware reference below) and is either closed with the trace cited
-or becomes its own OPEN item with a reproduction.
+(`divoomd/src/ble.rs` phase 3). The third June item, a custom-art ACK taken as
+success with no read-back, is settled by OW.36 (2026-10-31: "drop gallery
+read, keep local record"); see P9.10.
+**Done when:** (a) and (b) each have a `DIVOOMD_BLE_DEBUG` trace read with the
+A/B rule (Hardware reference below), cited here, that shows the behaviour
+correct; a trace that shows it wrong is fixed through a test in
+`divoomd/tests/live_jobs_stress.rs` (or the SPP bridge's tests) watched red
+first.
 
 #### P9.10 — The stored gallery cannot be READ BACK on this hardware
 **Status:** WATCH (the trigger is named: a panel that answers `0x8E`)
@@ -295,7 +312,9 @@ stable release.
 <7), `pyee` 14+ (16.0.1 out; playwright 1.60 caps <14) and `playwright` 1.63+
 (1.64.1 out; camoufox 0.5.9 caps <1.63) are unreachable, not declined. The
 reachable step inside the caps (playwright 1.62) is P1.23's.
-**Done when:** each parent widens its cap and the major moves in its own commit.
+**Done when:** each major is in `pyproject.toml` and the lock in its own commit with the
+local gate (`tools/gate.sh --full`) and CI green on it, and `uv pip list
+--outdated` names none of the three.
 
 #### P9.11 — zbus 6 for the Linux tray (`ksni`)
 **Status:** WATCH
@@ -306,7 +325,7 @@ carries it with monitor's `secret-service`.
 **Done when:** a ksni release on zbus 6 is taken and `cargo tree -i zbus`
 prints one 6.x version.
 
-#### P9.12 — One live preview widget per panel (umbrella WG.5, under WG.7)
+#### P9.12 — One live preview widget per panel (queue: WG.5, under WG.7)
 **Status:** BLOCKED (on WG.7's design record in ZoneWM: where the shared SpaceBarKit client lives and how a Rust app draws with it)
 **Why:** the owner's rulings: "let's add additional routines like desktop
 widgets (magnetised box/ system style) - remaining account usage on each of
@@ -324,6 +343,19 @@ macOS 27 widget gallery.
 **Done when:** divoom-control draws one live preview widget per paired device
 with SpaceBarKit from its own frame renderer, docking when ZoneWM runs and a
 system widget otherwise, with no device writes; released and installed.
+
+
+#### P9.13 — Each widget follows light and dark and magnetises to the Dock (queue: WG.LIGHTDARK)
+**Status:** BLOCKED (on the owner's go, OW.86, and on P9.12)
+**Why:** the owner asked for it on the roadmaps and NOT built now: "it should
+be possible to magnetize the spaces to the dock. routines mascot (and all the
+other widgets) should respect light/ dark mode, and should be able to
+magnetize to the dock as well. do not implement now, just add to the
+roadmaps". The umbrella holds it behind OW.86 ("Say go when you want them
+built") and ZoneWM's ZW.DOCKMAG; divoom's widget is P9.12's.
+**Done when:** after the owner's go and P9.12: a both-appearance render test of
+the divoom preview widget watched red first, and the installed widget read
+in Light and Dark docked to the SpaceBar and to the Dock.
 
 ---
 
@@ -420,7 +452,7 @@ from Rust, so `divoomd/src/spp.rs` spawns `divoom_client/spp_bridge.py` and
 still owns the device. (P1.25 moves the rest of the wire to Rust under this
 rule: byte-equal first, then the Python goes.)
 
-### Rules that came from shipped bugs
+### Rules that came from released bugs
 
 - **A re-render is not a selection.** Anything that runs on every status or scan
   event (`SpatialStage.refresh`, `PanelLevels.show`) repaints; it never moves
@@ -441,7 +473,7 @@ rule: byte-equal first, then the Python goes.)
   implemented" while the methods existed (D.SKIPS, `38e9d7c`);
   `tests/test_no_stale_not_implemented_skip.py` fails any such skip whose named
   method exists.
-- **A name removed from a shipped package is removed for every caller, shipped
+- **A name removed from a released package is removed for every caller, released
   or not.** L4c took the Python encoder out of `divoom_lib/framing.py` and the
   retired library kept calling it, so every live legacy send raised
   AttributeError behind mocked tests (D.LEGACY). The legacy library now frames
@@ -552,7 +584,7 @@ is judged against; when one moves, change it here in the same commit.
 | Measure | Value | Where it is enforced |
 |---|---|---|
 | Local gate | 30 `GOH_CI_STEPS` (incl. the browser suites and CI's Linux `--all-features` lint, 2026-10-20) + `scripts/py_ci.sh` = 31 steps, run by `pre-push` on the pushed commit in a clean worktree | `.gatesrc`, `tools/gate.sh`, `scripts/ci_local.sh` |
-| Python tests (default) | 2397 passed, 224 skipped (CI run 42409564495, 2026-11-07) | `pytest.ini` (`testpaths = tests`) |
+| Python tests (default) | 2413 passed (`959cec9`, 2026-11-07, after D.SKIPS `38e9d7c` un-skipped 15); skip count to re-measure | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
 | Browser subset (serial) | 313 passed, 5 min 15 s (2026-11-02, `24ab74e`); CI step 317 passed, 10 skipped, 504 s on run 42409564495 | `scripts/browser_e2e.sh` |
 | Rust tests | 659 (2026-10-20) | `cargo test --locked` |
