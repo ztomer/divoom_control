@@ -1,28 +1,9 @@
 import struct
 import logging
 from pathlib import Path
-import ctypes
 
 
 logger = logging.getLogger("divoom_gui")
-
-# Dynamically load native C shared library for fast pixel tile compacting
-lib = None
-try:
-    lib_path = Path(__file__).resolve().parents[2] / "divoom_lib" / "libdivoom_compact.dylib"
-    if lib_path.exists():
-        lib = ctypes.CDLL(str(lib_path))
-        lib.compact_tiles.argtypes = [
-            ctypes.POINTER(ctypes.c_ubyte),  # const unsigned char* frame_data
-            ctypes.c_int,  # int frame_data_len
-            ctypes.POINTER(ctypes.c_ubyte),  # unsigned char* output_pixels
-            ctypes.c_int,  # int row_count
-            ctypes.c_int,  # int column_count
-        ]
-        lib.compact_tiles.restype = None
-        logger.info("Successfully loaded native C compacting library!")
-except Exception as e:
-    logger.warning(f"Failed to load native compact library, using pure python fallback: {e}")
 
 
 def extract_image_from_magic_43(file_data: bytes) -> tuple[bytes, str] | None:
@@ -296,25 +277,6 @@ def _compact_tiles(frame_data: bytes, row_count: int, column_count: int):
 
     width, height = column_count * 16, row_count * 16
 
-    if lib is not None:
-        try:
-            # Allocate ctypes array for output
-            out_size = width * height * 3
-            out_buf = (ctypes.c_ubyte * out_size)()
-
-            # Copy input buffer to ctypes array
-            in_len = len(frame_data)
-            in_buf = (ctypes.c_ubyte * in_len).from_buffer_copy(frame_data)
-
-            # Execute high-performance C compacting loop
-            lib.compact_tiles(in_buf, in_len, out_buf, row_count, column_count)
-
-            # Create PIL image directly from buffer bytes
-            return Image.frombytes("RGB", (width, height), bytes(out_buf))
-        except Exception as e:
-            logger.warning(f"Native tile compacting failed, falling back to python: {e}")
-
-    # Pure Python Fallback
     img = Image.new("RGB", (width, height))
     pixels = img.load()
     pos = 0

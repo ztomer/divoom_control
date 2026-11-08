@@ -109,7 +109,7 @@ divoom-control = "divoom_lib.cli:main"
 
 [tool.setuptools]
 # The retained core (divoom_lib: framing, models, transport interface, auth,
-# native_lib, the CLI/MCP clients), the daemon client and the GUI package
+# the CLI/MCP clients), the daemon client and the GUI package
 # (macOS only). The direct-to-device library is NOT shipped: it was retired
 # to examples/divoom_legacy on 2026-09-14 and is excluded below. Native
 # The web_ui/ directory is package data.
@@ -125,7 +125,7 @@ exclude = ["tests*", "examples*", "references*", "scripts*", "docs*"]
 #
 # No native binary is shipped any more (phase L4, 2026-09-25): `divoom_lib` used
 # to bundle `libdivoom_compact.{dylib,so}` and its C sources, which the daemon
-# loaded through `divoom_lib/native_lib.py` for the image encoders. Those
+# loaded through its `native_lib` module for the image encoders. Those
 # encoders are Rust in the daemon binary now, so the globs that put a
 # per-platform build artifact in the wheel are gone with the artifact.
 divoom_lib = [

@@ -4,7 +4,7 @@
     (driven by scripts/build_release.sh in a dedicated build venv)
 
 What ships: the four runtime packages (divoom_lib / divoom_client / divoom_gui /
-divoom_gui) and their package data (web_ui/, fonts/, the native dylib), plus
+divoom_gui) and their package data (web_ui/, fonts/), plus
 the third-party runtime deps (bleak, aiohttp, Pillow, pywebview, pyobjc).
 
 What does NOT ship — enforced by `excludes` + listing only the runtime packages:
@@ -51,10 +51,10 @@ AE_DESC = "Divoom Control reads the now-playing track from Music and Spotify to 
 
 APP = ["divoom_gui/gui_main.py"]
 
-# Ship the native Rust daemon + its encoder dylib at the bundle's Resources root
+# Ship the native Rust daemon at the bundle's Resources root
 # (Contents/Resources/) so the app runs `divoomd` instead of the Python fallback.
-# daemon_client.spawn_daemon finds them via RESOURCEPATH and points
-# DIVOOMD_ENCODER_LIB at the bundled dylib. Skipped if divoomd isn't built (the
+# daemon_client.spawn_daemon finds them via RESOURCEPATH. Skipped if divoomd isn't
+# built (the
 # Python daemon then ships as the fallback). build_release.sh builds divoomd first.
 _RES_FILES = [
     p
@@ -63,7 +63,6 @@ _RES_FILES = [
         # The native Rust menubar agent — the GUI spawns it (see gui_main
         # _resolve_menubar_binary, which finds it via RESOURCEPATH). Replaces the
         "target/release/divoom-menubar",
-        "divoom_lib/libdivoom_compact.dylib",
     )
     if os.path.exists(p)
 ]
@@ -77,8 +76,8 @@ OPTIONS = {
     # shipping packager (divoom.spec), but keep parity in case this path revives.
     **({"iconfile": _ICON} if os.path.exists(_ICON) else {}),
     # Listing the runtime packages as `packages` copies each as a real directory
-    # tree (not byte-compiled into the zip), so web_ui/, fonts/ and the native
-    # dylib travel with their package and resolve via Path(__file__).parent.
+    # tree (not byte-compiled into the zip), so web_ui/ and fonts/
+    # travel with their package and resolve via Path(__file__).parent.
     "packages": [
         "divoom_lib",
         "divoom_client",

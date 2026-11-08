@@ -10,8 +10,5 @@ test:
 	python3 -m pytest -q
 
 # Include the BLE hardware-integration tests (needs a real device + BT grant).
-test-hardware: native
+test-hardware:
 	python3 -m pytest -q --run-hardware
-
-clean-native:
-	rm -f divoom_lib/libdivoom_compact.dylib divoom_lib/libdivoom_compact.so divoom_lib/libdivoom_compact.dll

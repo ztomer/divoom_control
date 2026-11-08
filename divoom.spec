@@ -4,7 +4,7 @@
 pywebview's py2app bundle showed a blank WKWebView (file:// loads are blocked in
 that context); PyInstaller is pywebview's officially-supported packager and renders
 correctly. This builds a windowed onedir .app bundling the Python GUI + deps +
-web_ui, the native encoder dylib, and the Rust daemon + menubar binaries.
+web_ui and the Rust daemon + menubar binaries.
 
     .buildvenv/bin/pyinstaller --noconfirm divoom.spec   # -> dist/Divoom.app
 """
@@ -49,7 +49,7 @@ with open(_VERSION_STAMP, "w", encoding="utf-8") as _f:
 
 datas = [(_VERSION_STAMP, ".")]
 datas += collect_data_files("divoom_gui")          # web_ui/** (frontend)
-datas += collect_data_files("divoom_lib")          # fonts/*.bin + the native dylib
+datas += collect_data_files("divoom_lib")          # fonts/*.bin
 datas += collect_data_files("divoom_client")       # any packaged data
 # Rust binaries the GUI spawns — bundled under bin/ (resolved via sys._MEIPASS).
 # The now-playing helper ships ALONGSIDE the daemon: nowplaying's resolver looks

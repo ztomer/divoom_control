@@ -271,10 +271,6 @@ def encode_animation(frames: List[Frame]) -> List[bytes]:
         PACKET_NUM (u8: 0-based packet index)
         200 bytes  (the chunk; the last chunk may be shorter)
 
-    Routes through the C dylib (divoom_legacy.native.image_encoder) when
-    available; byte-identical to the pure-Python path. Falls back to
-    pure-Python if the dylib is missing or returns an error.
-
     Args:
         frames: list of (rgb_bytes, w, h, time_ms) tuples.
 
@@ -285,13 +281,6 @@ def encode_animation(frames: List[Frame]) -> List[bytes]:
     """
     if not frames:
         return []
-    try:
-        from divoom_legacy.native import image_encoder
-
-        if image_encoder.is_native_available():
-            return image_encoder.encode_animation(frames)
-    except Exception:
-        pass
     return _py_encode_animation(frames)
 
 

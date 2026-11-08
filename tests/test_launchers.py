@@ -38,17 +38,6 @@ def test_makefile_referenced_scripts_exist():
         assert (_REPO / rel).exists(), f"Makefile points at a missing file: {rel}"
 
 
-def test_makefile_clean_native_targets_real_lib_dir():
-    """clean-native must remove the native lib from its real home (divoom_lib/,
-    per R17), not the pre-rename gui/ path."""
-    mk = (_REPO / "Makefile").read_text(encoding="utf-8")
-    rm_paths = re.findall(r"libdivoom_compact\.(?:dylib|so|dll)", mk)
-    assert rm_paths, "Makefile clean-native no longer references the native lib"
-    assert "gui/libdivoom_compact.dylib" not in mk, "stale gui/ dylib path in Makefile"
-    # The directory it cleans from must exist.
-    assert (_REPO / "divoom_lib").is_dir()
-
-
 def test_no_stale_gui_path_in_launchers():
     """No launcher/build file may reference the pre-R17 top-level `gui/` dir."""
     offenders = []

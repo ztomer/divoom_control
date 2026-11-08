@@ -1,70 +1,34 @@
 """
-divoom_legacy.native — performance-sensitive native code exposed to Python.
+divoom_legacy.native -- the image encoder and downscaler, in pure Python.
 
-The three C sources that make up libdivoom_compact.dylib:
-
-  - `divoom_lib/native_src/compact.c`              — tile-compacting and protocol-framing
-                                   (the framing pair, now `divoom_legacy.wire`, and
-                                    compact_tiles). Was used by `divoom_lib.framing`
-                                   and the GUI's media decoder.
-
-  - `divoom_lib/native_src/downsample.c` — LANCZOS3 image downscaler
-                                            (drop-in for `PIL.Image.resize`).
-                                            Used by this module.
-
-  - `divoom_lib/native_src/image_encode.c` — palette encoder for 0x44/0x49
-                                              image push. Byte-identical to
-                                              the pure-Python encoder in
-                                              `divoom_legacy.utils.divoom_image_encode`.
-
-ARCHIVED (2026-09-25, L4 / 9a1cade): the C sources, the dylib, and
-`scripts/build_libdivoom.sh` are all gone from this tree — the daemon encodes in
-Rust. This module survives only as part of the retired `divoom_legacy` library,
-where every entry point already falls back to the pure-Python encoder when the
-dylib is absent, which is now always. Nothing here can load a dylib any more.
+The name is historical. These modules wrapped `libdivoom_compact.dylib` (a C
+library: tile compacting, a LANCZOS3 downscaler, a palette encoder) and fell back
+to Python when it was absent. The C sources, the dylib and
+`scripts/build_libdivoom.sh` were deleted in L4 (2026-09-25, 9a1cade) -- the
+daemon encodes in Rust -- so the fallback is all that has run since, and the
+unreachable native branches are now deleted from the wrappers too.
 
 Public API
 ----------
-- `downsample_lanczos(in_bytes, in_w, in_h, out_w, out_h, channels)` —
-  LANCZOS3 downscale, byte-identical to `PIL.Image.resize((out_w, out_h),
-  Image.LANCZOS)`. Falls back to a single PIL call if the dylib is
-  unavailable.
-- `encode_animation_frame(rgb, w, h, time_ms)` — single-frame 0x49 body.
-  Falls back to the pure-Python encoder if the dylib is unavailable.
-- `encode_static_image(rgb, w, h)` — single-image 0x44 body.
-  Falls back to the pure-Python encoder if the dylib is unavailable.
-- `encode_animation(frames)` — list of 0x49 packet payloads.
-  Falls back to the pure-Python encoder if the dylib is unavailable.
-- `is_native_available()` — `True` if the dylib is loaded.
-- `CHANNELS_RGB` / `CHANNELS_RGBA` — channel count constants.
+- `downsample_lanczos(in_bytes, in_w, in_h, out_w, out_h, channels)` --
+  LANCZOS3 downscale, identical to `PIL.Image.resize((out_w, out_h),
+  Image.LANCZOS)`.
+- `encode_animation_frame(rgb, w, h, time_ms)` -- single-frame 0x49 body.
+- `encode_static_image(rgb, w, h)` -- single-image 0x44 body.
+- `encode_animation(frames)` -- list of 0x49 packet payloads.
+- `CHANNELS_RGB` / `CHANNELS_RGBA` -- channel count constants.
 """
 
 from divoom_legacy.native.downscaler import (
     CHANNELS_RGB,
     CHANNELS_RGBA,
     downsample_lanczos,
-    is_native_available as _downscaler_is_native_available,
-    reset_for_tests as _downscaler_reset_for_tests,
 )
 from divoom_legacy.native.image_encoder import (
     encode_animation_frame,
     encode_animation,
     encode_static_image,
-    is_native_available as _encoder_is_native_available,
-    reset_for_tests as _encoder_reset_for_tests,
 )
-
-
-def is_native_available() -> bool:
-    """True if the C dylib is loaded for BOTH the downscaler and the encoder."""
-    return _downscaler_is_native_available() and _encoder_is_native_available()
-
-
-def reset_for_tests() -> None:
-    """Forget all cached dylib handles. Used by tests to simulate a fresh load."""
-    _downscaler_reset_for_tests()
-    _encoder_reset_for_tests()
-
 
 __all__ = [
     "CHANNELS_RGB",
@@ -73,6 +37,4 @@ __all__ = [
     "encode_animation_frame",
     "encode_animation",
     "encode_static_image",
-    "is_native_available",
-    "reset_for_tests",
 ]
