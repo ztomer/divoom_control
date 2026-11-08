@@ -21,10 +21,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, os.environ.get("GOH_DIR", os.path.expanduser("~/Projects/gates_of_heck")))
 from tui.lib import info, step, ok, err, warn, hr, section
 
 import time

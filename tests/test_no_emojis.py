@@ -92,7 +92,6 @@ def _is_emoji(ch: str) -> bool:
 # status glyphs (arrow / middot / check / cross / warning, matching
 # ~/projects/scripts/_stylerc). These are functional TUI iconography, not
 # decorative emoji — the R14 section-6 ban targets the latter.
-#   tui/lib.{sh,py}        — the self-contained Kare TUI style helpers.
 #   tools/check_no_emoji.py — the canonical house emoji gate now lives in the
 #                             gates_of_heck checkout ($GOH_DIR/checks/); it lists
 #                             the permitted Kare glyphs in its ALLOWED set +

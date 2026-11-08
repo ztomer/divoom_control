@@ -6,8 +6,6 @@
     "examples/divoom_legacy/utils/logger_utils.py": 4,
     "examples/tests/test_logger_utils.py": 4,
     "examples/tests/test_watchface_roundtrip.py": 4,
-    "tests/test_divoom_auth_coverage.py": 1,
-    "tui/lib.py": 7,
-    "tui/lib.sh": 3
+    "tests/test_divoom_auth_coverage.py": 1
   }
 }

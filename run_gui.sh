@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-source "$(dirname "$0")/tui/lib.sh"
+source "${GOH_DIR:-$HOME/Projects/gates_of_heck}/tui/lib.sh"
 info "Starting Divoom Desktop Control Center..."
 python3 divoom_gui/gui_main.py
 ok "Divoom Desktop Controller closed."

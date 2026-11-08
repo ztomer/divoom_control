@@ -516,7 +516,7 @@ UNKNOWN or SKIP, or the self-test has one branch proven and one still owed.
 daemon is not there.
 
 **A script prints through the house PUBLIC helpers** — `info`, `step`, `ok`,
-`err`, `warn`, `hr`, `section` from `tui/lib.py` (or `tools/_tui.py`, which
+`err`, `warn`, `hr`, `section` from gates_of_heck's `tui.lib` (or `tools/_tui.py`, which
 resolves the same helpers in CI). The TUI's colour constants are
 module-private (`_C_GRAY`, `_C_RESET`, ...); naming one from a script is a
 NameError, and `tools/check_scripts.py` now fails the push for it.
