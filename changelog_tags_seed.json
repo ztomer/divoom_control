@@ -1,0 +1,12 @@
+{
+ "why": "goh changelog-tags (GOH.CHANGELOGALL): the changelog against the v* tags -- this repository's findings on the day the check landed, keyed by its root commit. At or under its count warns; over it, unseeded, or an entry a full run finds clean is red. Fix the site and delete or lower its entry in the same commit: done is an empty list. A seed entry lives in its own repository's tree or goh's private store, never another repository's (GOH.SEEDPRIVATE).",
+ "entries": [
+  {
+   "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+   "repo": "divoom-control",
+   "path": "CHANGELOG.md",
+   "count": 18,
+   "reason": "unreviewed: 18 finding(s): 2 tag(s) with no heading, 16 heading(s) no tag names"
+  }
+ ]
+}
