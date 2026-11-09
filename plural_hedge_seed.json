@@ -235,13 +235,6 @@
   {
    "root": "474da023a227f6568de70d887cdcdddd9a35f013",
    "repo": "divoom-control",
-   "path": "tests/test_repo_gates.py",
-   "count": 1,
-   "reason": "unreviewed: 1 hedged plural: line 167"
-  },
-  {
-   "root": "474da023a227f6568de70d887cdcdddd9a35f013",
-   "repo": "divoom-control",
    "path": "tests/test_undefined_names_gate.py",
    "count": 1,
    "reason": "unreviewed: 1 hedged plural: line 46"
