@@ -179,8 +179,9 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=67     # read 75, every one declared (2026-10-21)
 # structural gate. Adopted 2026-10-18 after 19 of 20 red main runs that the
 # 27-step local gate passed. A ratchet both ways: an entry CI stops running, or
 # that GOH_CI_STEPS starts naming, is stale and red.
-GOH_CI_PARITY_EXEMPT='scripts/py_ci.sh: runs locally, through scripts/ci_local.sh --step (repo_gates.sh at pre-push), which the name match cannot see; only DIVOOM_GATE_FAST skips it, and it says so'
-GOH_CI_PARITY_MIN_SCRIPTS=12          # read 14
+GOH_CI_PARITY_EXEMPT='scripts/py_ci.sh: runs locally, through scripts/ci_local.sh --step (repo_gates.sh at pre-push), which the name match cannot see; only DIVOOM_GATE_FAST skips it, and it says so
+tools/gate.sh: the gate itself -- CI execs `tools/gate.sh --full`, which runs every GOH_CI_STEPS step, so no step can name it (CI.PUBLIC2)'
+GOH_CI_PARITY_MIN_SCRIPTS=3           # read 3: CI execs the gate, so it names only the gate and the camoufox pin it provisions (CI.PUBLIC2)
 
 # An MCP server is judged on the wire (goh check_mcp_wire.py, queue MCP.G;
 # lane MCP.DV). `divoomd mcp` owns no device: it is a client of a running

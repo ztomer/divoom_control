@@ -209,7 +209,7 @@ def test_the_workflow_installs_the_pin_and_runs_the_gates_script() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "tests.yml").read_text()
     assert 'SPEC="$(python3 tools/camoufox_installed.py --spec)"' in workflow
     assert 'camoufox fetch "$SPEC"' in workflow and 'camoufox set "$SPEC"' in workflow
-    assert "./scripts/browser_e2e.sh" in workflow
+    assert "run: ./tools/gate.sh --full" in workflow  # whose GOH_CI_STEPS run ./scripts/browser_e2e.sh
     gatesrc = (REPO_ROOT / ".gatesrc").read_text()
     steps = re.search(r"^GOH_CI_STEPS='([^']*)'", gatesrc, re.MULTILINE)
     assert steps is not None

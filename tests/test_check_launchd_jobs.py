@@ -300,7 +300,7 @@ def test_the_gate_is_wired_into_the_ci_steps_and_into_ci():
         "the launchd gate is not in GOH_CI_STEPS — it would be a gate nobody runs"
     )
     workflow = (REPO / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
-    assert "tools/check_launchd_jobs.py" in workflow, "the launchd gate is not in CI — CI would not see it"
+    assert "run: ./tools/gate.sh --full" in workflow, "CI does not run the gate, so it would not see the launchd step"
 
 
 class _Done:

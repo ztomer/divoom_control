@@ -19,25 +19,19 @@ WORKFLOW = ROOT / ".github" / "workflows" / "tests.yml"
 SCRIPT = ROOT / "scripts" / "check_linux_build.sh"
 
 
-def _ci_no_ble_lint() -> list[str]:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    match = re.search(r"- name: Lint core without BLE\n\s+run: (cargo clippy .+)", text)
-    assert match, "rust-core's 'Lint core without BLE' step is gone; re-point this test"
-    return shlex.split(match.group(1))[2:]  # drop `cargo clippy`
-
-
 def _script_lint_args() -> list[str]:
     match = re.search(r"^CI_LINT_ARGS=\((.+)\)$", SCRIPT.read_text(encoding="utf-8"), re.M)
     assert match, "CI_LINT_ARGS is gone from scripts/check_linux_build.sh"
     return shlex.split(match.group(1))
 
 
-def test_linux_cross_lint_uses_ci_flags_exactly() -> None:
-    assert _script_lint_args() == _ci_no_ble_lint()
+def test_ci_runs_the_gate_that_runs_the_script() -> None:
+    """CI execs `tools/gate.sh --full` (CI.PUBLIC2): the script's flags are CI's, by construction."""
+    assert "run: ./tools/gate.sh --full" in WORKFLOW.read_text(encoding="utf-8")
 
 
 def test_ci_lint_denies_warnings() -> None:
-    """The parity above is only worth having while CI's lint actually denies warnings."""
-    args = _ci_no_ble_lint()
+    """The lint is only worth running while it actually denies warnings."""
+    args = _script_lint_args()
     assert args[-3:] == ["--", "-D", "warnings"]
     assert "--all-targets" in args

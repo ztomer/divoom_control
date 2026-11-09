@@ -32,28 +32,16 @@ WORKFLOW = ROOT / ".github" / "workflows" / "tests.yml"
 SCRIPT = ROOT / "scripts" / "check_linux_all_features.sh"
 
 
-def _ci_all_features_lint() -> list[str]:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    # The step's `run:` line is not adjacent to its `name:` (comments sit
-    # between them), so the search spans the comment lines too.
-    match = re.search(
-        r"- name: cargo clippy \(divoomd, all targets/features, deny warnings\)\n"
-        r"(?:\s*#.*\n)*"
-        r"\s*run: (cargo clippy .+)",
-        text,
-    )
-    assert match, "rust-core's all-features clippy step is gone; re-point this test"
-    return shlex.split(match.group(1))[2:]  # drop `cargo clippy`
+def test_ci_runs_the_script_through_the_gate() -> None:
+    """CI execs `tools/gate.sh --full` (CI.PUBLIC2), whose GOH_CI_STEPS run this script, so
+    the flags CI lints Linux with ARE the script's: there is no second copy to keep equal."""
+    assert "run: ./tools/gate.sh --full" in WORKFLOW.read_text(encoding="utf-8")
 
 
 def _script_clippy_args() -> list[str]:
     match = re.search(r"^CI_CLIPPY_ARGS=\((.+)\)$", SCRIPT.read_text(encoding="utf-8"), re.M)
     assert match, "CI_CLIPPY_ARGS is gone from scripts/check_linux_all_features.sh"
     return shlex.split(match.group(1))
-
-
-def test_local_linux_lint_uses_ci_flags_exactly() -> None:
-    assert _script_clippy_args() == _ci_all_features_lint()
 
 
 def test_ci_lint_denies_warnings_and_covers_the_ble_feature() -> None:
@@ -64,7 +52,7 @@ def test_ci_lint_denies_warnings_and_covers_the_ble_feature() -> None:
     `-D warnings` is what makes a Linux-only WARNING red -- the class that
     shipped to CI 19 times out of 20 while the local gate stayed green.
     """
-    args = _ci_all_features_lint()
+    args = _script_clippy_args()
     assert "--all-features" in args
     assert "--all-targets" in args
     assert args[-3:] == ["--", "-D", "warnings"]

@@ -1,180 +1,68 @@
 name: tests
 
+# ONE job, ONE command: `./tools/gate.sh --full`, the command the pre-push hook runs (structural,
+# then tools/repo_gates.sh over .gatesrc's GOH_CI_STEPS), so CI and the local gate cannot drift
+# (CI.PUBLIC2, 2026-11-08). The steps before it only PROVISION the runner: the toolchains, the
+# Python dependencies and the pinned camoufox browser the GOH_CI_STEPS steps need. A check added to
+# the gate is in CI the moment it is in .gatesrc; nothing here restates one.
+#
+# Every action is pinned to a released tag's commit, the tag beside it, and gates_of_heck to a
+# NAMED release; raise either in its own commit, never to a moving tag.
+
 on:
   push:
   pull_request:
 
-jobs:
-  no-emoji:
-    # House style gate: emoji are a failure state — only the Kare icon set is
-    # permitted (the canonical checker in gates_of_heck: checks/check_no_emoji.py,
-    # consumed via GOH_DIR). Fast, no build needed.
-    runs-on: ubuntu-latest
-    # A dead runner hung the browser e2e step 70+ min; headroom over the no-emoji: 3.0 min max
-    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
-    timeout-minutes: 10
-    steps:
-      # persist-credentials: false on EVERY checkout in this file: by default
-      # checkout leaves the job token in git config (http.<host>.extraheader),
-      # which the structural gate's no-credential-in-git-config check refuses,
-      # and no step here does git network work after the clone (2026-10-05).
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      # Canonical house gates live in the gates_of_heck repo, consumed via
-      # GOH_DIR. Never vendored here — a copy of a checker is a copy that rots
-      # (CLAUDE.md, standing rule).
-      #
-      # THE REPO IS PRIVATE, and that is why this job was red from 2026-09-04:
-      # `actions/checkout`'s default GITHUB_TOKEN is scoped to THIS repository
-      # only, so a second private repo comes back "Not Found — get-a-repository"
-      # rather than "access denied". The comment here used to say "public",
-      # which is precisely the kind of stale premise that sends the reader
-      # looking for a network fault instead of a permission.
-      #
-      # Either remedy makes this green, and both are the repo owner's call:
-      #   * add a PAT with `repo` scope as the GOH_TOKEN secret, or
-      #   * make ztomer/gates_of_heck public again.
-      # The fallback keeps the default behaviour when no secret is set.
-      - name: Check out gates_of_heck
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          repository: ztomer/gates_of_heck
-          ref: v0.71.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
-          path: goh
-          token: ${{ secrets.GOH_TOKEN || github.token }}
-      # goh's tool floors (python3, shellcheck), met the ONE way goh provides:
-      # its goh-floors action reads them from goh's own floor table, so a floor
-      # raised there is met here with no edit (run 40291804362 went red when
-      # goh raised python3 to 3.15 and shellcheck to 0.11.0 over the runner's
-      # 3.12.3 and 0.9.0).
-      - name: Meet goh's tool floors
-        uses: ./goh/.github/actions/goh-floors
-      - uses: actions/setup-python@v7
-        with:
-          python-version-file: .python-version
-      # The tools structural.sh refuses to run without, from gates_of_heck's
-      # manifest rather than from the runner image happening to ship them:
-      # a hand-kept list drifted the day v0.20.0 made missing tools fatal.
-      # Fails closed -- the script failing, an empty list, or a tool still
-      # missing after apt all stop the step.
-      - name: Install the tools the structural gate requires
-        env:
-          GOH_DIR: ${{ github.workspace }}/goh
-        run: |
-          set -euo pipefail
-          names="$(python3 "$GOH_DIR/gates/required_tools.py" --layer structural --names)"
-          [ -n "$names" ]
-          missing="$(for t in $names; do command -v "$t" >/dev/null || echo "$t"; done)"
-          if [ -n "$missing" ]; then sudo apt-get update -qq && sudo apt-get install -y $missing; fi
-          for t in $names; do command -v "$t"; done
-      - name: Structural house gates
-        # The SAME entry the local gate list runs: structural.sh reads this
-        # repo's .gatesrc (GOH_EXCLUDE for docs/divoom_docs/, the 500-line cap,
-        # the length baseline) and runs emoji, markers, length, shell lint and
-        # secrets. R67's lesson stands: a gate whose two invocations disagree
-        # is not one gate, so CI and local share one command and one config.
-        # The native goh binary is the only tier since gates_of_heck v0.24.0
-        # (GOH_NO_NATIVE is retired and ignored); structural.sh builds it from
-        # the checkout with cargo, which the manifest step above guarantees.
-        run: GOH_DIR="$GITHUB_WORKSPACE/goh" bash goh/gates/structural.sh --full
-      # The same command GOH_CI_STEPS runs locally (.gatesrc): ruff check on the declared rule
-      # set, ruff format --check and noqa parity over every tracked .py. ruff is pinned to a
-      # released version so a formatter bump arrives in a commit, not in a runner image.
-      - name: Ruff (lint + format, every tracked .py)
-        env:
-          GOH_DIR: ${{ github.workspace }}/goh
-        run: |
-          python3 -m pip install --quiet ruff==0.17.4
-          bash goh/gates/py_staged.sh --all .
-      - name: Every script CI runs, the local gate runs too (ci_local_parity)
-        # The same command GOH_CI_STEPS runs first in .gatesrc. Here it guards
-        # the other direction of the same edit: a script added to THIS file
-        # without a local step goes red in CI too, not only on the next push.
-        run: GOH_DIR="$GITHUB_WORKSPACE/goh" python3 goh/checks/check_ci_local_parity.py
-      # R67: these ran ONLY in the local gate list, so local and CI disagreed
-      # about what "green" means — the same divergence the house rules name,
-      # pointing the other way. They resolve the TUI via tools/_tui.py, which
-      # finds the goh checkout above and degrades to plain text if absent.
-      - name: Scripts parse, lint, and reference live modules
-        run: python3 tools/check_scripts.py
-      # P1.14's parse gate moved INTO the shared gate (2026-10-22): the
-      # structural step above carries goh's `js-syntax` for this repo, opted
-      # in and floored by this repo's own `.gatesrc` (GOH_JS_SYNTAX /
-      # GOH_JS_SYNTAX_MIN_FILES), judged by the browser's goal per file
-      # (.js classic script, .mjs module, .cjs CommonJS) with templates
-      # substituted first, node the engine on the runners and here. It runs
-      # through the SAME command, config and goh checkout locally and in CI,
-      # so neither half can drift.
-      - name: Tests live in tests/, Rust test modules are cfg-gated (Phase 1)
-        run: python3 tools/check_test_placement.py
-      # check_examples resolves the facade's REAL classes (`has_member` on
-      # them), so it needs the facade's import closure (bleak, Pillow, ...):
-      # the package's runtime requirements, installed for THIS step alone.
-      - name: examples/ documents a facade that still exists (Phase 3)
-        run: |
-          pip install -r requirements.txt
-          python3 tools/check_examples.py
-      - name: Positional args are not read from the compacted list
-        run: python3 tools/check_positional_args.py
-      - name: Every client-socket write goes through the WRITE_TIMEOUT seam
-        run: python3 tools/check_bounded_writes.py
-      - name: Every browser wait carries the house UI budget
-        run: python3 tools/check_ui_budgets.py
-      - name: Rust and Python weather maps agree
-        run: python3 tools/check_weather_parity.py
-      - name: hotchannel.json's two parsers agree (R72)
-        run: python3 tools/check_hotchannel_parity.py
-      # The launchd gate's LIVE half needs a macOS LaunchAgents dir, so this
-      # step runs the half that runs everywhere: the tool's own self-test,
-      # which fails unless the checker can see a dead job. The live check runs
-      # in the local pre-push gate (and on this repo's own machine).
-      - name: A launchd job that points at a deleted file is a finding
-        run: python3 tools/check_launchd_jobs.py
-      - name: Everything the daemon owns lives in the daemon (R72)
-        run: python3 tools/capability_census.py
-      - name: The GUI is a client, not a second implementation (R70)
-        run: python3 tools/check_gui_is_a_client.py
-      - name: Version is consistent across pyproject, CHANGELOG, tags and crates
-        run: python3 tools/check_version_consistency.py
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-  test:
-    # macOS so clang builds the dylib and the native (C) encoder tests actually run.
-    runs-on: macos-latest
-    # A dead runner hung the browser e2e step 70+ min; headroom over the test: 27.7 min max (browser e2e step 942 s on 41520841922)
-    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
-    timeout-minutes: 60
-    # The suite needs goh: test_linux_all_features_runtime.py sources its
-    # lib/container_runtime.sh, and test_repo_gates.py skips without it. With
-    # no checkout the script fell back to a developer's path
-    # ($HOME/Projects/gates_of_heck) and three tests were red (2026-11-01).
-    # tests/test_ci_jobs_have_goh.py fails a pytest step with no goh before it.
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    # macOS: clang builds the dylib, the native encoder tests and the BLE build run, and
+    # divoom-menubar (Apple-target code) builds only here.
+    runs-on: macos-26
+    # A dead runner hung the browser e2e step 70+ min; the old jobs' longest was 27.7 min.
+    timeout-minutes: 90
     env:
       GOH_DIR: ${{ github.workspace }}/goh
     steps:
-      - uses: actions/checkout@v7
+      # persist-credentials: false on EVERY checkout: by default checkout leaves the job token in
+      # git config, which the structural gate's no-credential-in-git-config check refuses.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The browser step below and the TUI library use the same checkout.
+      # The house gates, consumed via GOH_DIR and never vendored. gates_of_heck is public, so
+      # the job's default token reads it.
       - name: Check out gates_of_heck
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: ztomer/gates_of_heck
-          ref: v0.71.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
+          ref: v0.92.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
           path: goh
-          token: ${{ secrets.GOH_TOKEN || github.token }}
-
-      - uses: actions/setup-python@v7
+      # goh's tool floors (python3, shellcheck), from goh's own floor table.
+      - name: Meet goh's tool floors
+        uses: ./goh/.github/actions/goh-floors
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
-
-      # R70 P5.2: the `brew install portaudio` step that used to sit here is
-      # gone with the audio visualizer. pyaudio has no macOS-arm64 wheel, so
-      # every macOS CI run built it from Homebrew sources — for a 150-line
-      # worker that no JS could start, and that was never in requirements.txt
-      # at all.
+      # The newest stable release (house rule), with the components the gate's rust steps run.
+      - name: Rust toolchain (stable)
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview
+          rustup default stable
+          rustc -V
+      # The tools goh's gates refuse to run without, from goh's manifest rather than a copy.
+      - name: Install the tools the gate requires
+        run: |
+          set -euo pipefail
+          cmds="$(python3 "$GOH_DIR/gates/required_tools.py" --repo . --install)"
+          printf '%s\n' "$cmds"
+          grep -v '^#' <<<"$cmds" | bash -eux
       - name: Install dependencies
         # camoufox imports PyYAML's C loader unconditionally
         # (`from yaml import CLoader` in camoufox/pkgman.py and geolocation.py,
@@ -263,158 +151,7 @@ jobs:
           python3 tools/camoufox_installed.py  # emit the failure and exit non-zero
           exit 1
 
-      # R70 P5.0. This gate imports DivoomGuiAPI to enumerate the REAL class —
-      # an AST approximation could disagree with the actual MRO, and the whole
-      # point is what exists at runtime. So it runs HERE, where the GUI's
-      # dependencies are installed, not in the dependency-free checks job:
-      # placed there it died with `ModuleNotFoundError: No module named
-      # 'webview'` before checking anything, which is exactly the trap
-      # tools/_tui.py was written for.
-      - name: Every GUI API method has a caller (R70)
-        run: python3 tools/check_gui_api_reachable.py
-
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build native divoomd (ble) for the Rust-daemon parity suite
-        # Without this, tests/test_rust_daemon_parity.py skips (no binary) so the
-        # Rust↔Python parity tests never run in CI. Default features include `ble`.
-        run: cargo build -p divoomd --locked
-
-      - name: Run tests (C + Python parity + Rust-daemon parity; browser suites opt in below)
-        run: python3 -m pytest -q
-
-      # The browser suites run in their OWN step, serialized, after everything
-      # else: they are the process-contention-sensitive part (v0.37 step 5
-      # measured a 5x swing in one readiness wait under load), and until
-      # 2026-09-12 CI installed camoufox and then never ran them at all --
-      # the default pytest run skips them without --run-browser.
-      # scripts/browser_e2e.sh is the same command the local gate runs
-      # (.gatesrc GOH_CI_STEPS); CI only narrows it to serial for its 3-core
-      # runner.
-      # The script speaks through the house TUI library (gates_of_heck tui/lib.sh),
-      # from the job's goh checkout above.
-      - name: Run the browser e2e suites (--run-browser, serialized)
+      - name: The gate
         env:
           DIVOOM_BROWSER_WORKERS: "0"
-        run: GOH_DIR="$GITHUB_WORKSPACE/goh" ./scripts/browser_e2e.sh
-
-  rust-core:
-    # The hardware-/platform-free gate for the native daemon. Builds + tests the
-    # protocol/transport core WITHOUT the `ble` feature (no btleplug), on Linux —
-    # this is what regressed unnoticed in e4bd424 because no CI ran cargo.
-    #
-    # R66: runs from the WORKSPACE ROOT, not `working-directory: divoomd`. The
-    # old scoping meant divoom-menubar was never formatted, linted, built, or
-    # tested by any gate — it had never once been through cargo fmt. fmt/clippy
-    # cover every member; --no-default-features stays pinned to `-p divoomd`
-    # because the no-BLE core gate is about that crate specifically.
-    runs-on: ubuntu-latest
-    # A dead runner hung the browser e2e step 70+ min; headroom over the rust-core: 6.7 min max
-    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - name: Check out gates_of_heck
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          repository: ztomer/gates_of_heck
-          ref: v0.71.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
-          path: goh
-          token: ${{ secrets.GOH_TOKEN || github.token }}
-      # goh's tool floors (python3, shellcheck), met the ONE way goh provides:
-      # its goh-floors action reads them from goh's own floor table, so a floor
-      # raised there is met here with no edit (run 40291804362 went red when
-      # goh raised python3 to 3.15 and shellcheck to 0.11.0 over the runner's
-      # 3.12.3 and 0.9.0).
-      - name: Meet goh's tool floors
-        uses: ./goh/.github/actions/goh-floors
-      - name: No #[allow] in tracked Rust source (house gate)
-        # Through goh.sh, the one entry for a house check: the by-path Python
-        # checkers are retired forwarders since gates_of_heck v0.24.0.
-        run: GOH_DIR="$GITHUB_WORKSPACE/goh" bash goh/gates/goh.sh no-allow
-      - name: Install D-Bus headers
-        # clippy --all-features enables `ble` → btleplug → dbus → libdbus-sys,
-        # which needs the system dbus-1.pc. Without this the clippy step fails
-        # on Ubuntu even though the job is otherwise the no-BLE core gate.
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-      - name: cargo fmt --check (whole workspace — no system deps needed)
-        run: cargo fmt --all -- --check
-      - name: cargo clippy (divoomd, all targets/features, deny warnings)
-        # Scoped to divoomd deliberately: this is the LINUX job, and a
-        # workspace-wide clippy pulls in divoom-menubar, which is macOS-only
-        # and never ships on Linux (its winit/ksni deps are Apple-target
-        # code; the menubar has no Linux build). The macOS rust-ble job lints
-        # the whole workspace instead.
-        run: cargo clippy -p divoomd --all-targets --all-features -- -D warnings
-      # Clippy reports only on the cfg it COMPILED for and is silent about
-      # every other, so the no-BLE half was built and tested but never linted:
-      # 21 warnings while the default build sat at zero. Same blind spot closed
-      # in monitor (b2c41d7) -- a crate with cfg(feature) halves needs every
-      # shipped configuration linted or one half drifts.
-      # `[lints.cargo] unused_dependencies` is an UNUSED MANIFEST KEY on stable
-      # cargo -- it needs -Zcargo-lints on nightly, so a repo that declares it
-      # has never once had it enforced. cargo-machete does the job on stable.
-      - name: No unused dependencies
-        run: cargo install cargo-machete --locked && cargo machete
-      - name: Lint core without BLE
-        run: cargo clippy -p divoomd --no-default-features --all-targets --locked -- -D warnings
-      - name: Build core without BLE
-        run: cargo build -p divoomd --no-default-features --locked
-      - name: Test core without BLE
-        run: cargo test -p divoomd --no-default-features --locked
-      - name: Built binaries report the app version (house gate)
-        # AFTER the build on purpose: this gate reads target/, so running it
-        # earlier would find nothing built and pass on the absence of its
-        # subject. See tools/check_built_binaries.py.
-        run: python3 tools/check_built_binaries.py
-
-  rust-ble:
-    # Full native daemon build with the `ble` feature (btleplug against
-    # CoreBluetooth). macOS because it is the only platform where the
-    # workspace-wide lint runs: divoom-menubar (winit/ksni) is macOS-only
-    # (Apple-target code, no Linux build).
-    runs-on: macos-latest
-    # A dead runner hung the browser e2e step 70+ min; headroom over the rust-ble: 5.2 min max
-    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - name: cargo clippy (whole workspace, all targets/features, deny warnings)
-        # macOS owns the workspace-wide lint: it is the only platform where
-        # divoom-menubar (winit/ksni) builds (Apple-target code).
-        run: cargo clippy --all-targets --all-features -- -D warnings
-      - name: Build + test with BLE (whole workspace)
-        # Workspace root: this also builds and runs divoom-menubar's tests,
-        # which no CI job reached before R66.
-        run: cargo test --locked
-      - name: Built binaries report the app version (house gate)
-        # The only job that builds BOTH product binaries, so the only one where
-        # divoom-menubar's stamp is checked. Runs after the build for the same
-        # reason as in rust-core.
-        run: python3 tools/check_built_binaries.py
-
-  rust-ble-linux:
-    # Best-effort: prove the btleplug BlueZ backend COMPILES on Linux. No device,
-    # no runtime claim (maintainer has no Linux hardware). Non-blocking.
-    runs-on: ubuntu-latest
-    # A dead runner hung the browser e2e step 70+ min; headroom over the rust-ble-linux: 1.7 min max
-    # measured on runs 41467559335/41485639091/41520841922 (2026-11-02).
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install BlueZ/D-Bus headers (btleplug build dep)
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-      - name: Build with BLE (compile-only)
-        run: cargo build -p divoomd --features ble --locked
+        run: ./tools/gate.sh --full

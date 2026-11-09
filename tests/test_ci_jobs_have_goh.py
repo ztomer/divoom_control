@@ -18,7 +18,8 @@ import yaml
 WORKFLOW = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows" / "tests.yml"
 
 
-_PYTEST = re.compile(r"(?m)(python3? -m pytest|^\s*pytest)\b")
+# `tools/gate.sh --full` runs the suite too (GOH_CI_STEPS), and is the one command CI runs.
+_PYTEST = re.compile(r"(?m)(python3? -m pytest|^\s*pytest|tools/gate\.sh --full)\b")
 
 
 def _runs_pytest(step: dict) -> bool:
