@@ -42,7 +42,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ztomer/gates_of_heck
-          ref: v0.92.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
+          ref: v0.93.0   # a NAMED goh release, never main (CI.PUBLIC, 2026-11-08); raise it deliberately
           path: goh
       # goh's tool floors (python3, shellcheck), from goh's own floor table.
       - name: Meet goh's tool floors
@@ -63,6 +63,23 @@ jobs:
           cmds="$(python3 "$GOH_DIR/gates/required_tools.py" --repo . --install)"
           printf '%s\n' "$cmds"
           grep -v '^#' <<<"$cmds" | bash -eux
+      # The repo's own cross-check and coverage steps (scripts/check_linux_build.sh,
+      # scripts/rust_coverage.sh) need tools goh's manifest does not list, each at a NAMED
+      # release: cargo-zigbuild and cargo-llvm-cov from crates.io (--locked), zig from its
+      # release tarball, checked against the sha256 ziglang.org publishes for it.
+      - name: Install the repo's cross-build and coverage tools
+        env:
+          ZIG_VERSION: "0.17.1"
+          ZIG_SHA256: 75f1bc7a1e9852f17ec9a0c1895f767c4ec56d46bc8a834920eece1d0359dd8d
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-unknown-linux-gnu
+          cargo install --locked cargo-zigbuild@0.24.1 cargo-llvm-cov@0.9.1
+          tarball="zig-aarch64-macos-${ZIG_VERSION}.tar.xz"
+          curl -fsSLo "$RUNNER_TEMP/$tarball" "https://ziglang.org/download/${ZIG_VERSION}/${tarball}"
+          echo "${ZIG_SHA256}  $RUNNER_TEMP/$tarball" | shasum -a 256 -c -
+          tar -xJf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/zig-aarch64-macos-${ZIG_VERSION}" >> "$GITHUB_PATH"
       - name: Install dependencies
         # camoufox imports PyYAML's C loader unconditionally
         # (`from yaml import CLoader` in camoufox/pkgman.py and geolocation.py,
@@ -95,7 +112,7 @@ jobs:
           # passes -- the BROWSER BUILD is (see the fetch step below).
           # camoufox accepts any build in [alpha.1, 1), so pinning the package
           # alone still lets `fetch` take the newest.
-          pip install pytest pytest-xdist pillow -e '.[e2e]'
+          pip install pytest pytest-xdist pytest-cov pillow -e '.[e2e]'
           # The artifact, not the exit code: the C loader camoufox needs is there.
           python -c 'import yaml, camoufox.pkgman; assert yaml.__with_libyaml__, "PyYAML built without libyaml"'
 
@@ -155,3 +172,26 @@ jobs:
         env:
           DIVOOM_BROWSER_WORKERS: "0"
         run: ./tools/gate.sh --full
+
+  # The Linux --all-features lint (scripts/check_linux_all_features.sh) runs in docker, which
+  # the macOS runner above does not have; there the step says NOT APPLICABLE, and here the same
+  # script runs unedited on a Linux runner that has docker (CI.PUBLIC2).
+  linux-all-features:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GOH_DIR: ${{ github.workspace }}/goh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out gates_of_heck
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ztomer/gates_of_heck
+          ref: v0.93.0   # the same NAMED goh release as the gate job
+          path: goh
+      - name: The cargo dirs the container mounts
+        run: mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
+      - run: ./scripts/check_linux_all_features.sh

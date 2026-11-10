@@ -106,3 +106,32 @@ def test_a_runtime_someone_else_is_using_is_not_stopped(tmp_path):
     assert rc == 0, out
     assert "colima start" in calls and "colima stop" not in calls, calls
     assert "leaving colima-stub running" in out, out
+
+
+def _run_without_docker(tmp_path: pathlib.Path, hosted: bool) -> tuple[int, str]:
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_ACTIONS", "DIVOOM_SKIP_LINUX_ALL_FEATURES")}
+    env.update({"PATH": "/usr/bin:/bin", "TMPDIR": str(tmp_path), "NO_COLOR": "1"})
+    if hosted:
+        env["GITHUB_ACTIONS"] = "true"
+    r = subprocess.run(
+        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
+        stdin=subprocess.DEVNULL, timeout=60, check=False,
+    )  # fmt: skip
+    return r.returncode, r.stdout + r.stderr
+
+
+def test_no_docker_on_a_hosted_macos_runner_is_not_applicable(tmp_path):
+    """divoom run 42916398583: the macOS-hosted runner has no docker, and the step was red for a
+    reason no commit can fix. There, and only there, it says NOT APPLICABLE (78, goh's
+    lib/not_applicable.py contract) and names the Linux job that runs it; the gate's local_ci
+    accepts 78 on a hosted run only."""
+    rc, out = _run_without_docker(tmp_path, hosted=True)
+    assert rc == 78, out
+    assert "NOT APPLICABLE on this hosted runner" in out and "linux-all-features" in out, out
+
+
+def test_no_docker_on_the_owners_machine_stays_red(tmp_path):
+    """The owner's machine is the judge of record: no docker there is the gate's failure."""
+    rc, out = _run_without_docker(tmp_path, hosted=False)
+    assert rc == 1, out
+    assert "missing: docker" in out and "NOT APPLICABLE" not in out, out

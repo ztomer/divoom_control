@@ -67,3 +67,14 @@ def test_the_lint_runs_in_the_local_gate() -> None:
     """
     gatesrc = (ROOT / ".gatesrc").read_text(encoding="utf-8")
     assert "scripts/check_linux_all_features.sh" in gatesrc, "the Linux --all-features lint is not in GOH_CI_STEPS"
+
+
+def test_a_hosted_linux_job_runs_the_script() -> None:
+    """The macOS gate job has no docker, so the script says NOT APPLICABLE there; the same
+    script, unedited, runs in a Linux job that has docker, so the lint still runs hosted."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    job = re.search(r"^  linux-all-features:\n((?:    .*\n|\n)+)", text, re.M)
+    assert job, "tests.yml has no linux-all-features job"
+    body = job.group(1)
+    assert re.search(r"runs-on: ubuntu-\d\d\.\d\d\b", body), "the Linux job names its runner image"
+    assert "run: ./scripts/check_linux_all_features.sh" in body

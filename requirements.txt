@@ -10,3 +10,4 @@ tomli-w
 pytest
 pytest-asyncio
 pytest-xdist
+pytest-cov

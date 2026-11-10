@@ -64,6 +64,14 @@ if [ "${DIVOOM_SKIP_LINUX_ALL_FEATURES:-}" = "1" ]; then
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
+    # A GitHub-hosted macOS runner has no docker, and no commit can give it one: there, and
+    # only there, the step is NOT APPLICABLE (exit 78, gates_of_heck lib/not_applicable.py; goh's
+    # local_ci accepts it on a hosted run only). The same script runs unedited in tests.yml's
+    # linux-all-features job, which has docker, so the lint is still run hosted (CI.PUBLIC2).
+    if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+        printf '⚠ NOT APPLICABLE on this hosted runner: the Linux --all-features lint needs docker, which is not here -- not a pass and not a failure; the linux-all-features job runs it, and the owner'"'"'s machine is the judge of record\n' >&2
+        exit 78
+    fi
     printf '✗ [linux-all-features] cannot run, missing: docker\n' >&2
     printf '  This gate IS CI'"'"'s Linux --all-features lint. Install Docker, or\n' >&2
     printf '  type DIVOOM_SKIP_LINUX_ALL_FEATURES=1 to skip it loudly.\n' >&2
