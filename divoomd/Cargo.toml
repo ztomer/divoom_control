@@ -30,7 +30,7 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "m
 # `divoomd mcp` is rmcp, the official Rust MCP SDK, since lane MCP.DV (owner
 # ruling OW.60): framing, version negotiation and the tools/call envelope are
 # upstream's. Served on the binary's existing tokio runtime.
-rmcp = { version = "3.7", default-features = false, features = ["server", "transport-io"] }
+rmcp = { version = "3.9", default-features = false, features = ["server", "transport-io"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # libloading went with the C FFI wrapper (phase L4): it existed only to
@@ -71,7 +71,7 @@ uuid = { version = "1", optional = true }
 # reqwest bump, repeat that three-way probe -- the positive half alone proves
 # nothing.
 reqwest = { version = "0.13", features = ["json", "rustls", "query", "charset"] }
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 plist = "1"
 sysinfo = "0.39"
 md-5 = "0.11"
