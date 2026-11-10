@@ -4,7 +4,15 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
-## Unreleased
+## v0.45.1 — security: rmcp 3.9.0 and libsqlite3-sys 0.39.1 (2026-11-10)
+
+Patch: RUSTSEC-2026-0462 and RUSTSEC-2026-0459, plus the unreleased work since v0.45.0.
+
+- **rmcp 3.9.0 and rusqlite 0.41.1 (libsqlite3-sys 0.39.1) clear two advisories.**
+  RUSTSEC-2026-0462 (rmcp below 3.9.0: unbounded response body buffering in
+  Streamable HTTP clients) and RUSTSEC-2026-0459 (libsqlite3-sys below 0.39.0: bundled
+  C SQLite CVE-2026-119375) had left `cargo audit` red on 2 vulnerabilities. No source
+  change was needed, `cargo tree -d` is unchanged, and no audit ignore was added.
 
 - **The retired library sends again, and examples/ cannot name a dead
   divoom_lib attribute (D.LEGACY).** L4c (`ae43751`) removed the Python
