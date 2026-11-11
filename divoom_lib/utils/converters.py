@@ -46,9 +46,8 @@ def color_to_rgb_list(color_input) -> list:
             g = int(color_str[2:4], 16)
             b = int(color_str[4:6], 16)
             return [r, g, b]
-    elif isinstance(color_input, (tuple, list)) and len(color_input) == 3:
-        if all(0 <= c <= 255 for c in color_input):
-            return list(color_input)
+    elif isinstance(color_input, (tuple, list)) and len(color_input) == 3 and all(0 <= c <= 255 for c in color_input):
+        return list(color_input)
 
     logger.warning(f"Unsupported color input format: {color_input}. Defaulting to [255, 255, 255].")
     return [255, 255, 255]
