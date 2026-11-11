@@ -249,6 +249,7 @@
             bench.appendChild(node);
         });
         if (!bench.querySelector('.spatial-node')) showEmptyRoom(bench);
+        drawNodes();
 
         // Show the selected panel's preview and channel controls the first time
         // the bench shows it -- not on every refresh: a scan result re-renders
@@ -455,25 +456,36 @@
         refreshBenchNodes();
     }
 
+    // Draw every node's screen NOW; the frame loop only animates. WebKit runs no
+    // frames for an off-screen window, so a node a broadcast built then (or a
+    // canvas the engine dropped) stayed blank (DV.BENCHBLANK): a rebuild draws
+    // its nodes, and so does the page coming back on screen.
+    function drawNodes() {
+        getDeviceList().forEach((dev, idx) => {
+            const addr = dev.address || ('dev-' + idx);
+            const cvs = document.getElementById(`stage-canvas-${addr}`);
+            if (window.DisplayPreviewRegistry) {
+                const display = window.DisplayPreviewRegistry.get(addr);
+                const wallSlot = window.DivoomState?.assignedSlots?.[addr];
+                if (wallSlot) display.setWallSlot(wallSlot);
+                if (cvs) display.renderTo(cvs, tick);
+            } else if (cvs) {
+                const ctx = cvs.getContext('2d');
+                ctx.fillStyle = '#07080a';
+                ctx.fillRect(0, 0, cvs.width, cvs.height);
+            }
+        });
+    }
+
     function startAnimationLoop() {
         function renderLoop() {
-            tick++;
-            getDeviceList().forEach((dev, idx) => {
-                const addr = dev.address || ('dev-' + idx);
-                const cvs = document.getElementById(`stage-canvas-${addr}`);
-                if (window.DisplayPreviewRegistry) {
-                    const display = window.DisplayPreviewRegistry.get(addr);
-                    const wallSlot = window.DivoomState?.assignedSlots?.[addr];
-                    if (wallSlot) display.setWallSlot(wallSlot);
-                    if (cvs) display.renderTo(cvs, tick);
-                } else if (cvs) {
-                    const ctx = cvs.getContext('2d');
-                    ctx.fillStyle = '#07080a';
-                    ctx.fillRect(0, 0, cvs.width, cvs.height);
-                }
-            });
+            // Ask for the next frame first: a draw that throws must not end the loop.
             requestAnimationFrame(renderLoop);
+            tick++;
+            drawNodes();
         }
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'hidden') drawNodes(); });
+        window.addEventListener('pageshow', drawNodes);
         renderLoop();
     }
 
