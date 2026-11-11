@@ -42,6 +42,16 @@ GOH_LINE_UNBOUNDED='docs/divoom_docs/'
 # dry-runs this check before it builds anything.
 GOH_TAG_VERSION_SOURCES='pyproject:pyproject.toml cargo:divoomd/Cargo.toml cargo:divoom-menubar/Cargo.toml'
 
+# `goh ship --bump patch` release kit (DV.SHIPKIT, 2026-11-11). goh refused this repo ("tags releases
+# but declares no GOH_SHIP_RELEASE"). scripts/release.sh reads its version from pyproject.toml and
+# refuses a tag whose commit is not on origin/main, so the step before it is an adapter: it bumps the
+# five version places, cuts CHANGELOG's Unreleased, commits, pushes through the pre-push gate, waits
+# for that commit's CI and execs release.sh (CI check, DMG, tag, GitHub release, cask). It pushes the
+# hand-off with its release commit, so goh's own push step is skipped. Pinned by
+# tests/test_ship_release.py.
+GOH_SHIP_RELEASE='scripts/ship_release.sh {version}'
+GOH_SHIP_RELEASE_PUSHES=1
+
 # ── Local CI steps (consumed by $GOH/gates/local_ci.sh via ci_local.sh) ────
 # Mirrors .github/workflows/tests.yml job-for-job.
 #
