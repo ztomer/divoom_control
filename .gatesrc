@@ -213,3 +213,9 @@ GOH_MCP_SERVERS='env -u DIVOOM_DAEMON_HOST -u DIVOOM_DAEMON_PORT -u DIVOOM_DAEMO
 # A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
 # turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
 GOH_RED_RUN=1
+
+# THE HOUSE RUFF SET (goh RUFF.RULES, gates/ruff_house.py): this repo's own ruff rules plus the
+# house's, each tracked .py held to its count in tools/py_lint_ceilings.json, seeded 2026-11-11
+# at that day's findings. A ceiling may only fall: over it is red with the findings, under it is
+# red until the lower number is written, and one for a file that is gone is stale.
+GOH_PY_LINT_CEILINGS=tools/py_lint_ceilings.json
