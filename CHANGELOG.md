@@ -4,6 +4,15 @@ All notable changes to divoom-control are documented here. The
 format is loosely Keep-A-Changelog; entries are grouped by
 shipped milestone (per the project planning docs).
 
+## Unreleased
+
+- **A bench node's preview is drawn when the bench is built (DV.BENCHBLANK).**
+  Only the animation loop drew the node canvases, and WebKit runs no frames while
+  the window is off screen, so a bench rebuilt then (a daemon device broadcast)
+  showed blank previews until something redrew it. The nodes are now drawn at the
+  end of every rebuild and when the page comes back on screen, and an error in one
+  draw no longer stops the loop.
+
 ## v0.45.1 — security: rmcp 3.9.0 and libsqlite3-sys 0.39.1 (2026-11-10)
 
 Patch: RUSTSEC-2026-0462 and RUSTSEC-2026-0459, plus the unreleased work since v0.45.0.
