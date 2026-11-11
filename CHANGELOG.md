@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+## v0.45.2 — The bench previews never blank after an off-screen rebuild
+
 - **A bench node's preview is drawn when the bench is built (DV.BENCHBLANK).**
   Only the animation loop drew the node canvases, and WebKit runs no frames while
   the window is off screen, so a bench rebuilt then (a daemon device broadcast)
