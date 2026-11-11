@@ -577,7 +577,7 @@ is judged against; when one moves, change it here in the same commit.
 | Python tests (default) | 2413 passed (`959cec9`, 2026-11-07, after D.SKIPS `38e9d7c` un-skipped 15); skip count to re-measure | `pytest.ini` (`testpaths = tests`) |
 | `examples/tests` | 1022 passed, 73 skipped (2026-10-19) | `scripts/py_ci.sh` |
 | Browser subset (serial) | 313 passed, 5 min 15 s (2026-11-02, `24ab74e`); CI step 317 passed, 10 skipped, 504 s on run 42409564495 | `scripts/browser_e2e.sh` |
-| Rust tests | 659 (2026-10-20) | `cargo test --locked` |
+| Rust tests | 811 passed, 2 ignored (`6ee6c3e`, 2026-11-10) | `cargo test --locked` |
 | Python coverage floor | 89.0 | `scripts/py_ci.sh` |
 | Rust coverage floor | 42 | `scripts/rust_coverage.sh` |
 | File length | 500 lines, allowlist empty | gates_of_heck structural layer |
