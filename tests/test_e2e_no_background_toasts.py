@@ -19,7 +19,15 @@ and the old code passed.)
 
 import pytest
 
-from tests.support.browser import add_init_js, eval_js, install_toast_recorder, launch, require_browser, wait_js
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    install_toast_recorder,
+    launch,
+    require_browser,
+    wait_js,
+)
+from tests.support.browser_startup import wait_startup_scan
 from tests.test_e2e_hot_channel_sync_button import INDEX_HTML
 
 _FAILING_API = """
@@ -43,8 +51,10 @@ async def test_an_untouched_page_raises_no_toast_even_when_its_scan_fails():
         await page.goto(f"file://{INDEX_HTML}")
         try:
             await wait_js(page, "() => !!window.DivoomState && !!window.runBleScan")
-            # The startup scan fires ~1 s after load; give every timer a turn.
-            await page.wait_for_timeout(4000)
+            # The startup scan has run and reported (it toasted in the same
+            # call, before the report, if it toasted at all) -- the event, not
+            # a 4 s sleep a loaded machine can finish before the scan starts.
+            await wait_startup_scan(page)
             toasts = await eval_js(page, "() => window.__divoomToasts.map(t => t.message)")
             assert toasts == [], f"background work toasted: {toasts}"
         finally:

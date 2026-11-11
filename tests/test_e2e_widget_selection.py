@@ -68,8 +68,8 @@ async def test_selecting_a_widget_survives_the_reconciler_with_no_active_job():
 
             # Run the reconciler the way the app does, with a device present and
             # no jobs. This is the call that used to undo the click.
+            # Awaited: the reconciler returns its promise, so no sleep stands in for it.
             await eval_js(page, "() => window.restoreActiveWidgetForDevice('AA:BB:CC:DD:EE:FF')")
-            await page.wait_for_timeout(400)
 
             assert await eval_js(page, "() => window.selectedWidgetIs('sysmon')") is True, (
                 "the reconciler must not override an explicit selection when the device simply has no live job running"
@@ -89,7 +89,6 @@ async def test_the_selected_card_keeps_its_active_styling():
         try:
             await eval_js(page, "() => document.getElementById('widget-card-sysmon').click()")
             await eval_js(page, "() => window.restoreActiveWidgetForDevice('AA:BB:CC:DD:EE:FF')")
-            await page.wait_for_timeout(400)
             active = await eval_js(
                 page, "() => document.getElementById('widget-card-sysmon').classList.contains('widget-active')"
             )
@@ -121,7 +120,6 @@ async def test_a_running_job_is_still_adopted():
             }""",
             )
             await eval_js(page, "() => window.restoreActiveWidgetForDevice('AA:BB:CC:DD:EE:FF')")
-            await page.wait_for_timeout(400)
 
             assert await eval_js(page, "() => window.selectedWidgetIs('weather')") is True, (
                 "a live job on the device is authoritative and must be adopted"

@@ -149,9 +149,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Returns the reconcile's promise, so a caller (an e2e test) can await
+    // the reconcile itself rather than a sleep it hopes outlasts it.
     window.restoreActiveWidgetForDevice = function(mac) {
-        if (!mac || !window.pywebview || !window.pywebview.api || !window.pywebview.api.live_job_list) return;
-        window.pywebview.api.live_job_list(mac).then(resJson => {
+        if (!mac || !window.pywebview || !window.pywebview.api || !window.pywebview.api.live_job_list) return Promise.resolve();
+        return window.pywebview.api.live_job_list(mac).then(resJson => {
             let res = resJson;
             if (typeof resJson === "string") {
                 try { res = JSON.parse(resJson); } catch (e) {}

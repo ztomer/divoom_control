@@ -20,6 +20,7 @@ from tests.support.browser import (
     wait_js,
     wait_toast,
 )
+from tests.support.browser_startup import wait_startup_scan
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
 
@@ -46,6 +47,11 @@ async def _open(p):
     await page.goto(f"file://{INDEX_HTML}")
     await page.wait_for_load_state("domcontentloaded")
     await wait_js(page, "() => !!window.DivoomState && !!window.renderDeviceDots")
+    # The app's own startup scan, on a timer, has reported. Until it has, it
+    # can fire inside a test's gesture: a test's HELD scan_devices then holds
+    # the startup scan too, the release ends THAT one (no toast, indicator
+    # hidden) and the test's own scan never finishes (wait_startup_scan).
+    await wait_startup_scan(page)
     return browser, page
 
 
@@ -73,15 +79,13 @@ async def test_scan_shows_progress_then_result():
             await wait_js(page, "() => typeof window.__release === 'function'")
             assert await eval_js(page, "() => document.getElementById('scan-indicator').hidden") is False
             await eval_js(page, "() => window.__release()")
-            # Afterwards: hidden again + a 'Found 2 screens' toast that's actually shown.
-            await wait_js(page, "() => document.getElementById('scan-indicator').hidden === true")
-            toast = await eval_js(
-                page,
-                "() => ({c: document.getElementById('toast').className,"
-                "        t: document.getElementById('toast').textContent})",
-            )
-            assert "show" in toast["c"]
-            assert "Found 2 screens" in toast["t"]
+            # Afterwards: hidden again + a 'Found 2 screens' toast that's actually
+            # shown. Read off the recorder, which snapshots the element as the
+            # toast was raised: the live element drops `show` on a 3s timer, so
+            # reading it after the indicator wait raced that timer.
+            toast = await wait_toast(page, "Found 2 screens", kind="success")
+            assert "show" in toast["rendered"]["className"].split(), toast
+            assert await eval_js(page, "() => document.getElementById('scan-indicator').hidden") is True
         finally:
             await browser.close()
 
@@ -108,31 +112,30 @@ async def test_connect_shows_connecting_then_connected():
                 window.connectDevice('Ditoo', 'AA');
             }""",
             )
-            # Immediately: feedback that a connect is in flight.
+            # Immediately: feedback that a connect is in flight. The toast off
+            # the recorder (the live element is shared and timer-cleared).
+            await wait_toast(page, "Connecting to Ditoo")
             mid = await eval_js(
                 page,
                 """() => ({
-                toast: document.getElementById('toast').textContent,
                 connecting: !!document.querySelector('#device-dots .device-chip.connecting')
                           || (document.getElementById('global-status-dot')||{}).className
                              ?.includes('mark-pending')
             })""",
             )
-            assert "Connecting to Ditoo" in mid["toast"]
             assert mid["connecting"]
             await wait_js(page, "() => typeof window.__release === 'function'")
             await eval_js(page, "() => window.__release()")
             # After success: connected toast + active state + banner names the device.
             await wait_js(page, "() => window.DivoomState.appConnected === true")
+            await wait_toast(page, "Connected to Ditoo")
             done = await eval_js(
                 page,
                 """() => ({
-                toast: document.getElementById('toast').textContent,
                 active: !!document.querySelector('#device-dots .device-chip.chip-active'),
                 banner: document.getElementById('banner-device-name').textContent
             })""",
             )
-            assert "Connected to Ditoo" in done["toast"]
             assert done["active"] is True
             assert done["banner"] == "Ditoo"
         finally:

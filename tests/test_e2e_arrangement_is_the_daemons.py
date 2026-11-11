@@ -66,7 +66,13 @@ window.__api = {
   get_topology: () => {
     window.__topologyReads += 1;
     if (window.__topologyReads <= window.__failTopology) return {success: false, error: 'daemon unavailable'};
-    return {success: true, topology: window.__topology, screens: []};
+    const answer = {success: true, topology: window.__topology, screens: []};
+    if (!window.__failTopology) return answer;
+    // After failing, the answer is HELD until the test calls __answerTopology():
+    // "before the daemon answers" is a state the test owns, not the page's
+    // retry backoff (250+500+1000ms), which a loaded machine's test steps
+    // outran -- the 4th read landed before "try N" was ever sampled.
+    return new Promise(r => { window.__answerTopology = () => r(answer); });
   },
   set_topology: (t) => { window.__calls.push({m: 'set_topology', args: [t]}); return {success: true}; },
   update_wall_slots: (s) => { window.__calls.push({m: 'update_wall_slots', args: [s]}); return null; },
@@ -131,12 +137,16 @@ async def test_the_bench_waits_for_the_daemon_and_writes_nothing_meanwhile():
             await wait_js(
                 page, "() => /try [2-9]/.test(document.getElementById('spatial-bench-loading')?.textContent || '')"
             )
+            # The read after the failures is in flight and held: every gesture
+            # above happened before the daemon's copy, by construction.
+            await wait_js(page, "() => typeof window.__answerTopology === 'function'")
             text = await eval_js(page, "() => document.getElementById('spatial-bench-loading').textContent")
             assert "daemon unavailable" in text and "Retrying" in text, f"the loading state says why: {text!r}"
             assert await eval_js(page, _WRITES) == [], "nothing is written before the daemon's copy is read"
             assert await eval_js(page, "() => window.__calls.filter(c => c.m === 'update_wall_slots').length") == 0
 
             # The daemon answers (the 4th read): its copy is the bench.
+            await eval_js(page, "() => window.__answerTopology()")
             await wait_js(page, f"() => !!document.getElementById('spatial-node-{A}')")
             assert await eval_js(page, "() => !document.getElementById('spatial-bench-loading')")
             assert await _place(page, A) == {"x": 300, "y": 40}, "the daemon's place, not the stale one"
