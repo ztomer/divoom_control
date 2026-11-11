@@ -219,3 +219,10 @@ GOH_RED_RUN=1
 # at that day's findings. A ceiling may only fall: over it is red with the findings, under it is
 # red until the lower number is written, and one for a file that is gone is stale.
 GOH_PY_LINT_CEILINGS=tools/py_lint_ceilings.json
+
+# The Python gates' runner, DECLARED (DC.VENV, 2026-11-11). This repo has no project environment
+# (no uv.lock, no committed .venv), and goh's runner rule takes a present .venv before the pin, so
+# a stray `uv run` that left a ruff-less .venv turned the pre-commit gate into a refusal. Naming the
+# pinned interpreter (.python-version, the one CI's setup-python provisions) makes the verdict the
+# same with or without a .venv; tests/test_py_gate_ignores_stray_venv.py holds it.
+GOH_PY_RUNNER="python$(tr -d '[:space:]' <.python-version) -m"
