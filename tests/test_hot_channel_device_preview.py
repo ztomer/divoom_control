@@ -5,7 +5,14 @@ import json
 from pathlib import Path
 import pytest
 
-from tests.support.browser import launch as launch_browser, eval_js, wait_js, add_init_js
+from tests.support.browser import (
+    add_init_js,
+    eval_js,
+    install_toast_recorder,
+    launch as launch_browser,
+    wait_js,
+    wait_toast,
+)
 
 INDEX_HTML = Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui" / "index.html"
 MOCK_GIF_RED = "data:image/gif;base64,R0lGODlhEAAQAPAAAAAAAAAAACH5BAEAAAAALAAAAAAQABAAAAIOhI+py+0Po5y02ouzPgUAOw=="
@@ -68,6 +75,7 @@ async def test_hot_preview_and_device_preview():
         browser = await launch_browser(p)
         page = await browser.new_page(viewport={"width": 1200, "height": 850})
         await add_init_js(page, _MOCK_API)
+        await install_toast_recorder(page)
         await page.goto(f"file://{INDEX_HTML}")
         await page.wait_for_load_state("domcontentloaded")
         await wait_js(page, "() => !!window.DivoomState")
@@ -86,13 +94,22 @@ async def test_hot_preview_and_device_preview():
             }
         }""",
         )
-        await page.wait_for_timeout(300)
+        # The connect answered: the app's own "Connected to" toast is the event.
+        await wait_toast(page, "Connected to Timebox-Evo-1")
 
         # 1. Hot Channel Grid
         await page.click('.nav-btn[data-tab="pixel-art"]')
-        await page.wait_for_timeout(200)
+        await wait_js(page, "() => document.getElementById('pixel-art')?.classList.contains('active')")
         await page.click('.tab-btn[data-pixel-tab="pixel-hot-channel"]')
-        await page.wait_for_timeout(500)
+        # The grid is drawn once the manifest answered AND the animated GIF of
+        # each tile landed (both mock calls resolve on their own).
+        await wait_js(
+            page,
+            """() => {
+                const t = document.querySelectorAll("#hot-preview-list .hot-preview-thumb");
+                return t.length === 2 && Array.from(t).every(i => i.src.startsWith("data:image/gif"));
+            }""",
+        )
 
         thumbs = await eval_js(
             page,
@@ -106,7 +123,15 @@ async def test_hot_preview_and_device_preview():
 
         # 2. Hot Update -> Device Preview
         await page.click("#hot-update-btn")
-        await page.wait_for_timeout(300)
+        # The mock's progress event (done) makes the app set the device's cloud
+        # activity from the first tile.
+        await wait_js(
+            page,
+            """() => {
+                const a = window.DivoomState.deviceActivity?.["11:22:33:44:55:01"];
+                return !!a && a.kind === "cloud" && String(a.src).startsWith("data:image/gif");
+            }""",
+        )
 
         act = await eval_js(
             page,

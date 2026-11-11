@@ -118,7 +118,9 @@ async def test_every_label_and_switch_reads_at_3_to_1(theme):
             failures = {}
             for tab in TABS:
                 await page.click(f'.nav-btn[data-tab="{tab}"]')
-                await page.wait_for_timeout(300)
+                # The tab switch is the event (transitions are off, _SETTLED):
+                # the panel carries `active` once the app has shown it.
+                await wait_js(page, f"() => document.getElementById('{tab}')?.classList.contains('active')")
                 res = await eval_js(page, _PROBE, MIN_RATIO)
                 for line in res["bad"]:
                     failures.setdefault(line, tab)

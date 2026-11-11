@@ -233,9 +233,18 @@ window.renderWallButton = function() {
 // R47: surface a scan in progress in the main UI (the Scan button is buried in
 // Settings, so a scan used to give no feedback in the sidebar where the device
 // dots live).
+//
+// Scans can overlap (a user scan started while the startup scan runs), so this
+// COUNTS them: setScanning(true) opens one, setScanning(false) closes one, and
+// the indicator hides only when the last has closed. A boolean let whichever
+// scan finished first hide it while the other still ran. Every
+// setScanning(true) must be paired with exactly one setScanning(false).
+let scansInFlight = 0;
+window.scansInFlight = function() { return scansInFlight; };
 window.setScanning = function(on) {
+    scansInFlight = on ? scansInFlight + 1 : Math.max(0, scansInFlight - 1);
     const el = document.getElementById("scan-indicator");
-    if (el) el.hidden = !on;
+    if (el) el.hidden = scansInFlight === 0;
 };
 
 // Load known devices from persistent cache and merge in undetected ones

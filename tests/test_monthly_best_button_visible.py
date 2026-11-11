@@ -136,6 +136,15 @@ async def test_hot_channel_button_visible_with_many_preview_items():
         # button is trivially inside its bounds -- so the test passed while
         # measuring nothing. A vacuous pass is worse than a timeout.
         await page.wait_for_selector("#hot-preview-list", timeout=UI_TIMEOUT_MS)
+        # The sub-tab click schedules the app's own load of this list
+        # (`setTimeout(window.loadHotPreview, 50)`), which rewrites it wholesale
+        # (here: to its "Loading..."/error line, there being no bridge). Seeding
+        # before that write is seeding a list the app is about to replace, so
+        # the app's write is the event to wait for, not a settle time after.
+        await page.wait_for_function(
+            "() => !!document.querySelector('#hot-preview-list .hot-preview-empty')",
+            timeout=UI_TIMEOUT_MS,
+        )
         seeded = await eval_js(
             page,
             """
@@ -159,7 +168,10 @@ async def test_hot_channel_button_visible_with_many_preview_items():
             "#hot-preview-list was missing. The layout assertions below would "
             "have passed vacuously against an empty card."
         )
-        await page.wait_for_timeout(200)
+        # Layout is synchronous (bounding_box below forces it); what could still
+        # move the list is an app write, so check the seed survived.
+        survivors = await eval_js(page, "() => document.getElementById('hot-preview-list').children.length")
+        assert survivors == 50, f"the app rewrote #hot-preview-list after it was seeded ({survivors} children)"
 
         card_box = await page.locator("#pixel-hot-channel .card.glass-card").first.bounding_box()
         button_box = await page.locator("#hot-update-btn").bounding_box()

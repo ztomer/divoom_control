@@ -90,6 +90,63 @@ async def test_scan_shows_progress_then_result():
             await browser.close()
 
 
+# Every scan_devices call is HELD until the test releases it, the app's own
+# startup scan included: "two scans in flight" is a state the test owns.
+_HELD_SCANS_API = """
+window.__scans = [];
+window.pywebview = { api: new Proxy({}, { get: (_t, name) => (...args) => {
+    if (name === 'scan_devices')
+        return new Promise(r => { window.__scans.push(() => r(JSON.stringify(
+            [{address:'AA',name:'Ditoo'}, {address:'BB',name:'Pixoo'}]))); });
+    return Promise.resolve(String(name).startsWith('get_') ? '{}' : true);
+}})};
+"""
+
+_INDICATOR_HIDDEN_JS = "() => document.getElementById('scan-indicator').hidden"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("first_to_end", [0, 1], ids=["startup_ends_first", "user_ends_first"])
+async def test_overlapping_scans_keep_the_indicator_until_both_end(first_to_end):
+    """A user scan started while the startup scan runs: the indicator stays up
+    until the LAST of the two ends (it was one boolean, so whichever finished
+    first hid it while the other still ran), and the user's scan reports its
+    own result."""
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await launch_browser(p)
+        try:
+            page = await browser.new_page()
+            await add_init_js(page, _HELD_SCANS_API)
+            await install_toast_recorder(page)
+            await page.goto(f"file://{INDEX_HTML}")
+            await wait_js(page, "() => !!window.DivoomState && !!window.runBleScan")
+            # The startup scan is in flight (held), then the user starts theirs.
+            await wait_js(page, "() => window.__scans.length === 1")
+            await eval_js(page, "() => window.runBleScan()")
+            await wait_js(page, "() => window.__scans.length === 2")
+            assert await eval_js(page, _INDICATOR_HIDDEN_JS) is False
+
+            await eval_js(page, f"() => window.__scans[{first_to_end}]()")
+            # The first scan's report is the event (the user's scan toasts; the
+            # startup scan reports in the scan card).
+            if first_to_end == 1:
+                await wait_toast(page, "Found 2 screens", kind="success")
+            else:
+                await wait_js(page, "() => !!document.getElementById('scan-result')?.dataset.kind")
+            assert await eval_js(page, _INDICATOR_HIDDEN_JS) is False, (
+                "the indicator hid while the other scan was still running"
+            )
+
+            await eval_js(page, f"() => window.__scans[{1 - first_to_end}]()")
+            await wait_js(page, _INDICATOR_HIDDEN_JS)
+            await wait_toast(page, "Found 2 screens", kind="success")
+        finally:
+            await browser.close()
+
+
 @pytest.mark.asyncio
 async def test_connect_shows_connecting_then_connected():
     """Connecting raises an immediate 'Connecting…' toast + a connecting pulse, and

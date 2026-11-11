@@ -226,13 +226,24 @@ document.addEventListener("DOMContentLoaded", () => {
         if (scanSpinner) scanSpinner.style.display = "inline-block";
         if (scanBtn) scanBtn.disabled = true;
         window.setScanning?.(true);
+        // Close THIS scan; the spinner and button come back only when no other
+        // scan is still running (scans overlap: setScanning counts them).
+        // Once only: a throw in the .then handler lands in .catch, which ends
+        // the scan again, and a second close would end ANOTHER scan's count.
+        let ended = false;
+        const endScan = () => {
+            if (ended) return;
+            ended = true;
+            window.setScanning?.(false);
+            if (window.scansInFlight?.() > 0) return;
+            if (scanSpinner) scanSpinner.style.display = "none";
+            if (scanBtn) scanBtn.disabled = false;
+        };
 
         if (window.pywebview && window.pywebview.api) {
             window.pywebview.api.scan_devices(timeout, limit)
                 .then(devicesJson => {
-                    if (scanSpinner) scanSpinner.style.display = "none";
-                    if (scanBtn) scanBtn.disabled = false;
-                    window.setScanning?.(false);
+                    endScan();
 
                     const devices = JSON.parse(devicesJson);
                     // R46 #5: merge (don't replace) so a device busy streaming a
@@ -250,17 +261,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     // The scan runs in the daemon, which can die mid-scan (e.g. a
                     // native BLE/CoreBluetooth crash on some Python builds). Don't
                     // leave the spinner stuck — re-enable + surface the error.
-                    if (scanSpinner) scanSpinner.style.display = "none";
-                    if (scanBtn) scanBtn.disabled = false;
-                    window.setScanning?.(false);
+                    endScan();
                     const why = (err && err.message) ? err.message : "the background service did not answer";
                     sayScan(`✗ Scan failed: ${why}`, "error", opts);
                     console.error("scan_devices failed:", err);
                 });
         } else {
-            if (scanSpinner) scanSpinner.style.display = "none";
-            if (scanBtn) scanBtn.disabled = false;
-            window.setScanning?.(false);
+            endScan();
             sayScan("✗ Scan failed: the app's bridge is not available", "error", opts);
         }
     }
