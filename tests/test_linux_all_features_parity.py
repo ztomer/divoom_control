@@ -80,3 +80,17 @@ def test_a_hosted_linux_job_runs_the_script() -> None:
     assert "run: ./scripts/check_linux_all_features.sh" in body
     # goh's scripts refuse a house Python below its floor; ubuntu's is 3.12 (run 42930213049).
     assert "uses: ./goh/.github/actions/goh-floors" in body, "the Linux job meets goh's tool floors"
+
+
+def test_the_base_image_is_a_named_release() -> None:
+    """`rust:latest` is a moving tag: the same commit linted against a different toolchain
+    tomorrow, and a cached lint image that never noticed the base moved. The base is a NAMED
+    release (house rule: latest is a named release), and the cached image's tag carries it,
+    so raising the base rebuilds the image instead of reusing the old one."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    base = re.search(r'^BASE_TAG="\$\{DIVOOM_LINUX_LINT_BASE_TAG:-([^}]+)\}"$', text, re.M)
+    assert base, "BASE_TAG is gone from scripts/check_linux_all_features.sh"
+    assert re.fullmatch(r"\d+\.\d+\.\d+-[a-z]+", base.group(1)), base.group(1)
+    assert 'BASE_IMAGE="${DIVOOM_LINUX_LINT_BASE_IMAGE:-rust:$BASE_TAG}"' in text
+    assert 'IMAGE="${DIVOOM_LINUX_LINT_IMAGE:-divoom-linux-lint:$BASE_TAG}"' in text
+    assert not re.search(r"\b(rust|divoom-linux-lint):latest\b", text)

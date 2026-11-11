@@ -28,9 +28,11 @@
 # gives the same Debian userland CI's Ubuntu runner has, and the same
 # `libdbus-1-dev` + `pkg-config` pair CI installs.
 #
-# The toolchain tracks the `rust:latest` image (stable), like CI's
-# `dtolnay/rust-toolchain@stable`. The gate PRINTS the toolchain it used, so a
-# drift between this and CI is visible in the log rather than silent.
+# The toolchain is a NAMED `rust:<version>-<debian>` image (BASE_TAG below),
+# never the moving `latest` tag (house rule: latest is a named release); raise
+# it with the stable toolchain, in its own commit. The gate PRINTS the
+# toolchain it used, so a drift between this and CI's `stable` is visible in
+# the log rather than silent.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,11 +49,13 @@ type info >/dev/null 2>&1 || { info() { echo "→ $*"; }; ok() { echo "✓ $*"; 
 # tests/test_linux_all_features_parity.py holds the two together.
 CI_CLIPPY_ARGS=(-p divoomd --all-targets --all-features -- -D warnings)
 
-# The image: stable Rust + the clippy component CI's job installs. It is
-# built once and cached; the base is `rust:latest`, so a refreshed base
-# rebuilds it.
-BASE_IMAGE="${DIVOOM_LINUX_LINT_BASE_IMAGE:-rust:latest}"
-IMAGE="${DIVOOM_LINUX_LINT_IMAGE:-divoom-linux-lint:latest}"
+# The image: a named stable Rust + the clippy component CI's job installs. It
+# is built once and cached under a tag that carries the base's, so raising
+# BASE_TAG builds a new image instead of reusing the old toolchain's.
+# tests/test_linux_all_features_parity.py holds both to a named release.
+BASE_TAG="${DIVOOM_LINUX_LINT_BASE_TAG:-1.99.1-trixie}"
+BASE_IMAGE="${DIVOOM_LINUX_LINT_BASE_IMAGE:-rust:$BASE_TAG}"
+IMAGE="${DIVOOM_LINUX_LINT_IMAGE:-divoom-linux-lint:$BASE_TAG}"
 # Where the container's cargo target dir and registry live. The target dir is
 # OUTSIDE the checkout on purpose: the Linux artifacts must not land in the
 # repo's own target/, where tools/check_built_binaries.py would read a Linux
