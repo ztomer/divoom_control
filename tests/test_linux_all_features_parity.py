@@ -78,3 +78,5 @@ def test_a_hosted_linux_job_runs_the_script() -> None:
     body = job.group(1)
     assert re.search(r"runs-on: ubuntu-\d\d\.\d\d\b", body), "the Linux job names its runner image"
     assert "run: ./scripts/check_linux_all_features.sh" in body
+    # goh's scripts refuse a house Python below its floor; ubuntu's is 3.12 (run 42930213049).
+    assert "uses: ./goh/.github/actions/goh-floors" in body, "the Linux job meets goh's tool floors"

@@ -192,6 +192,9 @@ jobs:
           repository: ztomer/gates_of_heck
           ref: v0.93.0   # the same NAMED goh release as the gate job
           path: goh
+      # goh's floors (the house Python 3.15): the runner's /usr/bin/python3 is 3.12, below it.
+      - name: Meet goh's tool floors
+        uses: ./goh/.github/actions/goh-floors
       - name: The cargo dirs the container mounts
         run: mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
       - run: ./scripts/check_linux_all_features.sh
