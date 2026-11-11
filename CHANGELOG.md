@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A ship installs what it released (DV.SHIPINSTALL).** `goh ship` released 0.45.2 and left 0.45.1 installed: `.gatesrc` named a release kit and no install step. `scripts/ship_install.sh` is that step now: it refreshes the tap clone, refuses a cask that does not declare the released version, runs `brew upgrade --cask`, proves the installed Divoom.app reports the version and launches it. Pinned by `tests/test_ship_install.py`.
+
 ## v0.45.2 — The bench previews never blank after an off-screen rebuild
 
 - **A bench node's preview is drawn when the bench is built (DV.BENCHBLANK).**
