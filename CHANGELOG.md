@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A window that opens behind others draws its page (DV.BGLAUNCH).** `goh ship` relaunches Divoom with `open -g`, so the Control Center opens behind the owner's windows, and WKWebView paints nothing in a window that is covered from its first show: a capture of it held 2 colours until it was uncovered or the app activated (613 once drawn). `divoom_gui/first_paint.py` turns WebKit's occlusion detection off before the first show and back on once the page has drawn two frames, so the covered window holds its first frame and the render loop is still throttled when covered later. A WebKit without the switch degrades to the old behaviour with a log line. Pinned by `tests/test_first_paint.py` (its window test, `DIVOOM_WINDOW_TESTS=1`, opens a real window under a cover and reads blank without the fix).
+
 ## v0.45.3 — A ship installs its release; bench nodes draw their own clock and say which panels are linked
 
 - **A clock node draws its own clock, not the menubar's tile (DV.CLOCKTHUMB).** The daemon echoed the 36 px PNG the GUI records for the menubar as the `activity` event's `preview`, the field a live job's frame rides in, and the bench drew it: a blurred, upscaled clock on the Ditoo node. `set_device_activity`'s echo now says `preview_is: "thumbnail"`, and the node keeps the shared renderer's render at its own size; a live job's frame still draws.

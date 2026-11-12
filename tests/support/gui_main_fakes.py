@@ -41,6 +41,8 @@ class _ClosingEvent:
 class _FakeMainEvents:
     def __init__(self):
         self.closing = _ClosingEvent()
+        self.before_show = _ClosingEvent()
+        self.loaded = _ClosingEvent()
 
 
 class _FakeMainWindow:
