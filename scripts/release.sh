@@ -46,51 +46,20 @@ for arg in "$@"; do
 done
 
 # ci_gate — refuse to cut a release while GitHub CI is red for the commit being
-# tagged. Query the check-runs for HEAD; block on a failing or still-running
-# run. Allow ONLY a failure that reads like credit/billing depletion.
+# tagged. Query the check-runs for HEAD (scripts/lib/ci_jobs.py); block on a failing or
+# still-running NON-advisory run. Allow ONLY a failure that reads like credit/billing depletion.
 ci_gate() {
-  local sha="$1"
+  local sha="$1" slug="$REPO" verdict rc=0
   echo "→ checking GitHub CI status for ${sha}"
-  local json
-  json="$(gh api "repos/${REPO}/commits/${sha}/check-runs" 2>/dev/null)" \
-    || { echo "  ERROR: could not query CI status (gh api failed)" >&2; exit 1; }
-  local verdict
-  # NOTE: the heredoc IS the python program (fed via stdin), so the JSON must
-  # be read from argv[1] — sys.stdin is already exhausted by the script itself.
-  verdict="$(python3 - "$json" <<'PY'
-import json, re, sys
-data = json.loads(sys.argv[1])
-runs = data.get("check_runs") or []
-if not runs:
-    print("NO_RUNS"); raise SystemExit
-incomplete = [r["name"] for r in runs if r.get("status") != "completed"]
-if incomplete:
-    print("PENDING " + ", ".join(incomplete)); raise SystemExit
-for r in runs:
-    c = r.get("conclusion")
-    if c in ("success", "neutral", "skipped"):
-        continue
-    out = r.get("output") or {}
-    blob = " ".join(str(x) for x in (r.get("name"), out.get("title"), out.get("summary")) if x)
-    if re.search(r"\b(credit|billing)\w*\b|out of minutes|usage limit", blob, re.I):
-        print("CREDITS " + r["name"]); raise SystemExit
-    print("FAIL " + r["name"]); raise SystemExit
-print("OK")
-PY
-)"
-  case "$verdict" in
-    OK) echo "  ✓ CI green (all check runs passed)" ;;
-    CREDITS*)
-      echo "  ⚠ CI failure on '${verdict#CREDITS }' looks like credit/billing depletion —"
-      echo "    allowing (per release rule: that's a money wall, not a code signal)." ;;
-    PENDING*)
-      echo "  ERROR: CI still running — ${verdict#PENDING }. Wait for it to finish." >&2; exit 1 ;;
-    FAIL*)
-      echo "  ERROR: CI check run failed — ${verdict#FAIL }. Refusing to cut a release on a red CI." >&2; exit 1 ;;
-    NO_RUNS)
-      echo "  ERROR: no CI check runs found for ${sha} — cannot verify CI is green." >&2
-      echo "  (If this is credit depletion, re-run with --skip-ci-check.)" >&2; exit 1 ;;
-    *) echo "  ERROR: could not parse CI status (${verdict})" >&2; exit 1 ;;
+  # The one reader of the check runs, and the one place that names the advisory jobs (DV.CIADVISORY):
+  # a duplicate-of-local job is reported, never blocking; a job local cannot reproduce blocks.
+  verdict="$(python3 "$ROOT/scripts/lib/ci_jobs.py" check "$slug" "$sha" 2>&1)" || rc=$?
+  case "$rc" in
+    0) echo "  ✓ ${verdict}" ;;
+    3) echo "  ERROR: ${verdict}. Wait for it to finish." >&2; exit 1 ;;
+    75) echo "  ERROR: ${verdict} -- not a failure, not a green; retry when it lifts." >&2; exit 75 ;;
+    *) echo "  ERROR: ${verdict}. Refusing to cut a release on a CI that is not green." >&2
+       echo "  (If this is credit depletion, re-run with --skip-ci-check.)" >&2; exit 1 ;;
   esac
 }
 
@@ -138,6 +107,8 @@ if [ "$CHECK_CI" -eq 1 ]; then
 else
   echo "→ skipping CI check (--skip-ci-check)"
 fi
+# DIVOOM_RELEASE_CI_ONLY stops here, for the tests of ci_gate (nothing is built or tagged).
+[ -z "${DIVOOM_RELEASE_CI_ONLY:-}" ] || exit 0
 
 # ── 1. build DMG ────────────────────────────────────────────────────────────
 if [ "$SKIP_BUILD" -eq 1 ] && [ -f "$DMG" ]; then

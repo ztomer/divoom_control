@@ -12,16 +12,19 @@
 #   2. push       HEAD to origin/main through the pre-push gate. release.sh refuses a tag whose commit
 #                 is not on origin/main (D.RELTAG), so the release commit must be there first; this is
 #                 why the kit pushes and goh's own push step is skipped (GOH_SHIP_RELEASE_PUSHES=1).
-#   3. CI         wait for the verdict on that commit through the throttle-aware door
-#                 (`loopctl ci SHA --repo OWNER/NAME --wait`); release.sh's own check refuses a
-#                 still-running CI, and the commit this kit just pushed is always still running.
+#   3. CI         wait for the check runs local cannot reproduce (scripts/lib/ci_jobs.py check
+#                 --wait: polls the commit's check runs, bounded, exit 75 when GitHub is throttled).
+#                 The macOS `gate` job duplicates the local gate and is advisory there (DV.CIADVISORY:
+#                 0.45.2 and 0.45.3 both stopped on its runner queue). release.sh's own check refuses
+#                 a still-running CI, and the commit this kit just pushed is always still running.
 #   4. release    exec scripts/release.sh, which re-checks CI (now green), builds the DMG, tags,
 #                 pushes the tag, creates the release and bumps the cask.
 #
 #   scripts/ship_release.sh 0.45.2
 #
-# Seams (the tests): GOH_LOOPCTL names the CI door; the release step is scripts/release.sh beside
-# this file. Nothing is asked of GitHub except through those.
+# Seams (the tests): `gh` on PATH (GOH_GH) is the CI door, DIVOOM_CI_POLL_S / DIVOOM_CI_TIMEOUT_S its
+# wait; the release step is scripts/release.sh beside this file. Nothing is asked of GitHub except
+# through those.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,7 +37,6 @@ GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 V="${1#v}"
 [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "version must be MAJOR.MINOR.PATCH, got '$1'"
 SUMMARY="${GOH_SHIP_SUMMARY:-}"
-LOOPCTL="${GOH_LOOPCTL:-$HOME/Projects/.loop/tools/loopctl.py}"
 
 [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] \
   || die "release refused: HEAD is not the branch main -- a release is cut from main; nothing changed"
@@ -71,11 +73,11 @@ REPO_SLUG="$(sed -n '/^REPO="/{s/^REPO="\([^"]*\)".*/\1/p;q;}' scripts/release.s
 [ -n "$REPO_SLUG" ] || die "cannot read REPO from scripts/release.sh"
 info "waiting for CI on $(git rev-parse --short HEAD) (${REPO_SLUG})"
 rc=0
-python3 "$LOOPCTL" ci "$(git rev-parse HEAD)" --repo "$REPO_SLUG" --wait || rc=$?
+python3 "$ROOT/scripts/lib/ci_jobs.py" check "$REPO_SLUG" "$(git rev-parse HEAD)" --wait || rc=$?
 if [ "$rc" -eq 75 ]; then
   die "GitHub is throttled (exit 75, above) -- not a failure, not a green; re-run the ship when it lifts" 75
 elif [ "$rc" -ne 0 ]; then
-  die "CI is not green on $(git rev-parse --short HEAD) (loopctl ci exit ${rc}, above) -- nothing tagged"
+  die "CI is not green on $(git rev-parse --short HEAD) (ci_jobs.py exit ${rc}, above) -- nothing tagged"
 fi
 ok "CI green"
 
