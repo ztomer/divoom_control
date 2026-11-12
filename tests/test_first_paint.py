@@ -68,13 +68,15 @@ class _FakeWindow:
         return True
 
 
-def _wire(window, webview_obj):
+def _wire(window, webview_obj, covered_now=False):
     """Returns the occlusion callbacks subscribed (call one with True/False to simulate a change)."""
     observers = []
     first_paint.keep_painting_while_occluded(
         window,
         native_webview=lambda w: webview_obj,
-        observe_occlusion=lambda wv, cb: observers.append(cb) or "token",
+        native_window=lambda w: "the NSWindow",
+        observe_occlusion=lambda nswindow, cb: observers.append((nswindow, cb)) or "token",
+        is_covered=lambda nswindow: covered_now,
     )
     return observers
 
@@ -95,21 +97,35 @@ def test_a_cover_and_an_uncover_reach_the_page():
     window, wv = _FakeWindow(), _FakeWebView()
     observers = _wire(window, wv)
     window.events.before_show.fire()
-    assert len(observers) == 1, "the window's occlusion changes must be observed"
-    observers[0](True)
-    observers[0](False)
+    assert [w for w, _ in observers] == ["the NSWindow"], "the window's occlusion changes must be observed"
+    observers[0][1](True)
+    observers[0][1](False)
     assert wv.native_js == [first_paint.covered_js(True), first_paint.covered_js(False)]
     assert "window.__divoomCovered = true" in first_paint.covered_js(True)
     assert first_paint.COVERED_EVENT in first_paint.covered_js(False)
 
 
-def test_a_loaded_page_is_told_the_state_seen_before_it_ran():
+@pytest.mark.parametrize("covered", [True, False])
+def test_a_loaded_page_is_told_the_windows_state_at_load(covered):
+    """Measured: a window covered from its first show got no occlusion notification at all,
+    so the page must be told the state when it loads, read from the window, not remembered."""
     window, wv = _FakeWindow(), _FakeWebView()
-    observers = _wire(window, wv)
+    _wire(window, wv, covered_now=covered)
     window.events.before_show.fire()
-    observers[0](True)  # covered at first show, before the page's script existed
     window.events.loaded.fire()
-    assert window.js == [first_paint.covered_js(True)]
+    assert window.js == [first_paint.covered_js(covered)]
+
+
+def test_the_default_seams_name_pywebviews_nswindow_not_the_web_views():
+    """Measured in the real app: at before_show `webview.window()` is None (the web view is not
+    in its window yet), so an observer built from it watched nothing. The NSWindow is
+    pywebview's BrowserView.window."""
+    import inspect
+
+    src = inspect.getsource(first_paint._cocoa_window)
+    assert "browser.window" in src and ".window()" not in src.split('"""')[-1].split("#")[0]
+    sig = inspect.signature(first_paint.keep_painting_while_occluded)
+    assert sig.parameters["native_window"].default is first_paint._cocoa_window
 
 
 def test_without_the_switch_nothing_is_observed():

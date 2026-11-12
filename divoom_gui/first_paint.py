@@ -23,7 +23,8 @@ loop stops while covered and resumes when the window is seen again. A WebKit wit
 selector degrades to the old behaviour, with a log line saying so.
 
 Seams (tests/test_first_paint.py): `native_webview` returns the WKWebView (or None),
-`observe_occlusion` subscribes a callback to the NSWindow's occlusion changes.
+`native_window` its NSWindow, `observe_occlusion` subscribes a callback to that NSWindow's
+occlusion changes.
 """
 
 from __future__ import annotations
@@ -74,18 +75,26 @@ def _cocoa_webview(window: Any) -> Any:
     return None if browser is None else browser.webview
 
 
-def _observe_occlusion(webview_obj: Any, on_change: Callable[[bool], None]) -> Any:
-    """Call `on_change(covered)` on the main thread whenever the web view's window is
-    covered or uncovered. Returns the observer token (kept alive by the caller)."""
+def _cocoa_window(window: Any) -> Any:
+    # The NSWindow pywebview built. Not `webview.window()`: at before_show the web view is
+    # not in its window yet (measured: None), so the observer would have watched nothing.
+    from webview.platforms.cocoa import BrowserView
+
+    browser = BrowserView.instances.get(window.uid)
+    return None if browser is None else browser.window
+
+
+def _is_covered(nswindow: Any) -> bool:
+    return not (nswindow.occlusionState() & OCCLUSION_STATE_VISIBLE)
+
+
+def _observe_occlusion(nswindow: Any, on_change: Callable[[bool], None]) -> Any:
+    """Call `on_change(covered)` on the main thread whenever `nswindow` is covered or
+    uncovered. Returns the observer token (kept alive by the caller)."""
     import AppKit
 
-    nswindow = webview_obj.window()
-    if nswindow is None:
-        logger.warning("first paint: the web view has no window yet; the page is never told it is covered")
-        return None
-
     def _changed(_note: Any) -> None:
-        on_change(not (nswindow.occlusionState() & OCCLUSION_STATE_VISIBLE))
+        on_change(_is_covered(nswindow))
 
     return AppKit.NSNotificationCenter.defaultCenter().addObserverForName_object_queue_usingBlock_(
         AppKit.NSWindowDidChangeOcclusionStateNotification, nswindow, AppKit.NSOperationQueue.mainQueue(), _changed
@@ -96,12 +105,14 @@ def keep_painting_while_occluded(
     window: Any,
     *,
     native_webview: Callable[[Any], Any] = _cocoa_webview,
+    native_window: Callable[[Any], Any] = _cocoa_window,
     observe_occlusion: Callable[[Any, Callable[[bool], None]], Any] = _observe_occlusion,
+    is_covered: Callable[[Any], bool] = _is_covered,
 ) -> None:
     """Wire `window` (a pywebview Window) so it holds its page however long it is covered,
     and its page knows when it is covered. Call before `webview.start()`."""
     keep: list[Any] = []
-    state = {"covered": False}
+    state: dict[str, Any] = {"covered": False, "nswindow": None}
 
     def _covered(covered: bool) -> None:
         state["covered"] = covered
@@ -114,13 +125,23 @@ def keep_painting_while_occluded(
         # pywebview runs before_show synchronously on the main thread, before the window
         # is ordered in: the switch is set before WebKit first sees the occlusion state,
         # and it is never turned back on.
-        wv = native_webview(window)
-        if set_occlusion_detection(wv, False):
-            keep.append(observe_occlusion(wv, _covered))
+        if not set_occlusion_detection(native_webview(window), False):
+            return
+        nswindow = native_window(window)
+        if nswindow is None:
+            logger.warning("first paint: no NSWindow; the page is never told it is covered")
+            return
+        state["nswindow"] = nswindow
+        keep.append(observe_occlusion(nswindow, _covered))
 
     def _loaded() -> None:
-        # A change seen before the page's script ran was told to no page: tell this one.
-        # pywebview runs `loaded` on a worker thread, where evaluate_js may wait.
+        # The page's script did not exist for any change before it ran, and a window covered
+        # from its first show may see no change at all (measured: no notification), so the
+        # page is told the window's state NOW. `loaded` runs on a worker thread, where
+        # evaluate_js may wait.
+        if state["nswindow"] is None:
+            return
+        state["covered"] = is_covered(state["nswindow"])
         window.evaluate_js(covered_js(state["covered"]))
 
     window.events.before_show += _before_show
