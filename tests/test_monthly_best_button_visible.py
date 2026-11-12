@@ -137,12 +137,16 @@ async def test_hot_channel_button_visible_with_many_preview_items():
         # measuring nothing. A vacuous pass is worse than a timeout.
         await page.wait_for_selector("#hot-preview-list", timeout=UI_TIMEOUT_MS)
         # The sub-tab click schedules the app's own load of this list
-        # (`setTimeout(window.loadHotPreview, 50)`), which rewrites it wholesale
-        # (here: to its "Loading..."/error line, there being no bridge). Seeding
-        # before that write is seeding a list the app is about to replace, so
-        # the app's write is the event to wait for, not a settle time after.
+        # (`setTimeout(window.loadHotPreview, 50)`), which rewrites it wholesale.
+        # Seeding before that write is seeding a list the app is about to
+        # replace (DV.HOTLISTFLAKE: under load the seed landed first and the
+        # app's write left 1 child). The template ships the same "Loading..."
+        # line the loader writes, so the loader's TEXT cannot say it ran; its
+        # settle signal can: `data-load-state` on the list, which only the
+        # loader writes, and which is final ("no-bridge" here: no pywebview).
         await page.wait_for_function(
-            "() => !!document.querySelector('#hot-preview-list .hot-preview-empty')",
+            "() => ['loaded', 'empty', 'failed', 'no-bridge']"
+            ".includes(document.getElementById('hot-preview-list').dataset.loadState)",
             timeout=UI_TIMEOUT_MS,
         )
         seeded = await eval_js(

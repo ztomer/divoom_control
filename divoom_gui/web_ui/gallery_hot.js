@@ -30,20 +30,36 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // The list's settle signal (DV.HOTLISTFLAKE): `data-load-state` on #hot-preview-list is
+    // written ONLY here, "loading" while a load is in flight and then one final state:
+    // "loaded", "empty", "failed", or "no-bridge" (no pywebview API: nothing will answer).
+    // The template ships the same "Loading..." line this writes, so the text cannot say a
+    // load ran; the attribute can, and a test that seeds the list waits for it.
+    function setLoadState(list, state) { list.dataset.loadState = state; }
+
     function loadHotPreview() {
         const list = document.getElementById("hot-preview-list");
         if (!list) return;
         list.innerHTML = '<div class="hot-preview-empty">Loading hot channel manifest...</div>';
+        setLoadState(list, "loading");
         loadLastChecked();  // R53: show when this device was last checked
 
-        window.pywebview?.api?.hot_update_preview?.(shownMac() || "").then(json => {
+        const preview = window.pywebview?.api?.hot_update_preview;
+        if (!preview) {
+            list.innerHTML = '<div class="hot-preview-empty">Hot channel unavailable: the app bridge is not connected.</div>';
+            setLoadState(list, "no-bridge");
+            return;
+        }
+        window.pywebview.api.hot_update_preview(shownMac() || "").then(json => {
             let r;
             try { r = JSON.parse(json); } catch { r = {success: false}; }
             if (!r.success) {
                 list.innerHTML = `<div class="hot-preview-empty">${r.error || "Could not load hot manifest"}</div>`;
+                setLoadState(list, "failed");
                 return;
             }
             renderHotPreview(r.items);
+            setLoadState(list, r.items && r.items.length ? "loaded" : "empty");
         });
     }
 
