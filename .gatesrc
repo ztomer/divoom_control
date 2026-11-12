@@ -50,6 +50,7 @@ GOH_TAG_VERSION_SOURCES='pyproject:pyproject.toml cargo:divoomd/Cargo.toml cargo
 # hand-off with its release commit, so goh's own push step is skipped. Pinned by
 # tests/test_ship_release.py.
 GOH_SHIP_RELEASE='scripts/ship_release.sh {version}'
+GOH_SHIP_CHANGELOG='cut'  # scripts/ship_release.sh:52 runs changelog_cut.py cut from Unreleased
 GOH_SHIP_RELEASE_PUSHES=1
 # The install step (DV.SHIPINSTALL): goh released 0.45.2 and left 0.45.1 installed, because nothing
 # here named one. scripts/ship_install.sh refreshes the tap clone, refuses a cask that does not
