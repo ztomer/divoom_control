@@ -198,6 +198,25 @@ window.jewelClassFor = function(dev) {
     return "online";
 };
 
+// What the jewel's colour means, in words (DV.DEVICECOUNT): the bench draws
+// every panel in the arrangement, the daemon owns only the ones it LINKED, and
+// a grey dot was the one channel that told the two apart. The label is the
+// jewel's title and accessible name; a panel the daemon does not own gets a
+// hollow ring (spatial_stage.css [data-linked="false"]), shape as well as colour.
+window.jewelLabelFor = function(dev) {
+    if (!dev || !dev.daemonOwned) return "Not linked: the daemon has not connected this panel";
+    if (dev.activityState === "degraded") return "Linked, degraded: writes are failing";
+    if (dev.activityState === "disconnected") return "Linked, disconnected: the panel stopped answering";
+    return "Linked";
+};
+
+// The jewel's markup, the one way a bench node or ribbon chip draws it.
+window.jewelHtml = function(dev) {
+    const label = window.jewelLabelFor(dev).replace(/"/g, "&quot;");
+    return `<span class="spatial-jewel ${window.jewelClassFor(dev)}" data-linked="${!!(dev && dev.daemonOwned)}"`
+        + ` role="img" aria-label="${label}" title="${label}"></span>`;
+};
+
 // A panel the daemon reported as its own (an `owned_devices` row or a live
 // status for it): the only ids it keeps per-panel state for. The wall surface
 // (`MatrixWall`) is not one -- the daemon draws it through its slots -- and

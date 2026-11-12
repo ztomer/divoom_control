@@ -230,7 +230,7 @@
             node.innerHTML = `
                 <div class="spatial-node-header" style="width: 100%;">
                     <span class="spatial-node-name" title="${dev.name || spec.name}">${dev.name || spec.name}</span>
-                    <span class="spatial-jewel ${jewelClass(dev)}"></span>
+                    ${window.jewelHtml(dev)}
                 </div>
                 <div class="spatial-node-screen" style="width: ${sw}px; height: ${sw}px; margin: auto;">
                     <canvas id="stage-canvas-${addr}" width="${pw}" height="${ph}" 
@@ -276,7 +276,7 @@
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'spatial-ribbon-chip' + (isSelected ? ' active' : '');
-        chip.innerHTML = `<span class="spatial-jewel ${jewelClass(dev)}"></span> ${dev.name || 'Screen'}`;
+        chip.innerHTML = `${window.jewelHtml(dev)} ${dev.name || 'Screen'}`;
         chip.addEventListener('click', () => selectDevice(addr, dev));
         return chip;
     }

@@ -410,8 +410,10 @@ window.Divoom.onActivity = function(ev) {
     const mac = ev.mac;
     const kind = ev.kind;
     const opts = Object.assign({}, ev.opts || {});
-    // A live job's frame arrives with the pixels; the preview mirrors it.
-    if (ev.preview && !opts.src) opts.src = ev.preview;
+    // A live job's frame arrives with the pixels; the preview mirrors it. A
+    // client's menubar tile (`preview_is: "thumbnail"`, 36 px) is not drawn:
+    // the node draws its own render at its own size (DV.CLOCKTHUMB).
+    if (ev.preview && ev.preview_is !== "thumbnail" && !opts.src) opts.src = ev.preview;
     if (typeof window.saveDeviceChannel === "function") {
         window.saveDeviceChannel(mac, kind, opts);
     }

@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **A clock node draws its own clock, not the menubar's tile (DV.CLOCKTHUMB).** The daemon echoed the 36 px PNG the GUI records for the menubar as the `activity` event's `preview`, the field a live job's frame rides in, and the bench drew it: a blurred, upscaled clock on the Ditoo node. `set_device_activity`'s echo now says `preview_is: "thumbnail"`, and the node keeps the shared renderer's render at its own size; a live job's frame still draws.
+- **The bench says which panels the daemon has linked (DV.DEVICECOUNT).** The daemon reported 3 owned panels and the bench drew 4. Both were right: `owned_devices` is the LINKED set, and `get_topology` reports the fourth (Timoo-light-4, a real scanned panel placed in Ethan's room) with `connected: false`. A grey dot was the only thing that said so. A panel the daemon does not own now has a hollow ring with a name ("Not linked: ..."), every jewel says what it means, and the bench's linked panels are exactly the daemon's owned ones (`tests/test_e2e_bench_node_sources.py`).
 - **A ship installs what it released (DV.SHIPINSTALL).** `goh ship` released 0.45.2 and left 0.45.1 installed: `.gatesrc` named a release kit and no install step. `scripts/ship_install.sh` is that step now: it refreshes the tap clone, refuses a cask that does not declare the released version, runs `brew upgrade --cask`, proves the installed Divoom.app reports the version and launches it. Pinned by `tests/test_ship_install.py`.
 
 ## v0.45.2 — The bench previews never blank after an off-screen rebuild

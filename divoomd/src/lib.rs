@@ -8,6 +8,8 @@
 //! notify/response correlation, and the command queue — each pinned to the Python
 //! behavior by parity tests.
 
+#[cfg(test)]
+mod activity_echo_tests;
 pub mod ancs;
 pub mod arg_bounds;
 pub mod art;

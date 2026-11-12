@@ -296,6 +296,10 @@ async fn set_device_activity(daemon: &Daemon, req: Request) -> Value {
     }
     if let Some(ref p) = preview {
         ev["preview"] = json!(p);
+        // A client's menubar tile, not the panel's frame (DV.CLOCKTHUMB): a
+        // live job's `activity` carries the frame in the same field, and a
+        // preview that draws its own render must not draw this instead.
+        ev["preview_is"] = json!("thumbnail");
     }
     let _ = daemon.tx.send(ev);
     json!({"success": true})

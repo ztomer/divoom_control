@@ -262,6 +262,7 @@ body.theme-light {
 .spatial-jewel.online { background-color: var(--accent); box-shadow: 0 0 4px rgba(0, 204, 102, 0.45); }
 .spatial-jewel.amber { background-color: var(--warn); box-shadow: 0 0 4px rgba(255, 204, 0, 0.45); }
 .spatial-jewel.standby { background-color: var(--secondary); }
+.spatial-jewel[data-linked="false"] { background-color: transparent; border: 1px solid var(--secondary); box-shadow: none; box-sizing: border-box; }
 
 /* Compact Ribbon Fleet Chips (Appbar integrated) */
 .spatial-ribbon-chips {
