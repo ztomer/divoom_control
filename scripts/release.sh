@@ -45,21 +45,22 @@ for arg in "$@"; do
   esac
 done
 
-# ci_gate — refuse to cut a release while GitHub CI is red for the commit being
-# tagged. Query the check-runs for HEAD (scripts/lib/ci_jobs.py); block on a failing or
-# still-running NON-advisory run. Allow ONLY a failure that reads like credit/billing depletion.
+# ci_gate — refuse to cut a release while GitHub CI is not green for the commit being
+# tagged. One read through loopctl's door (DV.CIDOOR), which judges job by job with .gatesrc's
+# LOOP_CI_ADVISORY: a duplicate-of-local job is reported, never blocking; a job local cannot
+# reproduce blocks. A billing/credit-depleted CI is no verdict, so it is red here too; the
+# loud way past a CI that cannot run is --skip-ci-check.
 ci_gate() {
-  local sha="$1" slug="$REPO" verdict rc=0
+  local sha="$1" verdict rc=0
   echo "→ checking GitHub CI status for ${sha}"
-  # The one reader of the check runs, and the one place that names the advisory jobs (DV.CIADVISORY):
-  # a duplicate-of-local job is reported, never blocking; a job local cannot reproduce blocks.
-  verdict="$(python3 "$ROOT/scripts/lib/ci_jobs.py" check "$slug" "$sha" 2>&1)" || rc=$?
+  verdict="$(python3 "${DIVOOM_LOOPCTL:-$HOME/Projects/.loop/tools/loopctl.py}" ci "$sha" --repo divoom-control 2>&1)" || rc=$?
   case "$rc" in
     0) echo "  ✓ ${verdict}" ;;
-    3) echo "  ERROR: ${verdict}. Wait for it to finish." >&2; exit 1 ;;
+    3) echo "  ERROR: ${verdict}. CI is still pending; wait for it to finish." >&2; exit 1 ;;
+    4) echo "  ERROR: ${verdict}. No CI found for this commit." >&2; exit 1 ;;
     75) echo "  ERROR: ${verdict} -- not a failure, not a green; retry when it lifts." >&2; exit 75 ;;
     *) echo "  ERROR: ${verdict}. Refusing to cut a release on a CI that is not green." >&2
-       echo "  (If this is credit depletion, re-run with --skip-ci-check.)" >&2; exit 1 ;;
+       echo "  (If CI cannot run at all, e.g. credit depletion, re-run with --skip-ci-check.)" >&2; exit 1 ;;
   esac
 }
 
@@ -101,7 +102,7 @@ printf 'refs/tags/%s %s refs/tags/%s %s\n' "$TAG" "$(git rev-parse HEAD)" "$TAG"
        echo "  sources in .gatesrc (GOH_TAG_VERSION_SOURCES) -- nothing built or tagged." >&2; exit 1; }
 
 # Release rule: only cut when GitHub CI is green for the commit being tagged
-# (exception: credit depletion). Abort otherwise — see ci_gate above.
+# (a billing-depleted CI is not green either; --skip-ci-check is the loud way past). See ci_gate above.
 if [ "$CHECK_CI" -eq 1 ]; then
   ci_gate "$(git rev-parse HEAD)"
 else

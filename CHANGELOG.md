@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **CI is read through loopctl's door (DV.CIDOOR).** `scripts/ship_release.sh` waits on `loopctl.py ci SHA --repo divoom-control --wait` and `scripts/release.sh`'s `ci_gate` asks it once; `.gatesrc`'s `LOOP_CI_ADVISORY` names the macOS `gate` job as reported, never blocking. `scripts/lib/ci_jobs.py`, the repo's own check-runs reader, is gone. One behaviour is not carried over on purpose: it let a credit/billing-depleted failure through as green; loopctl reads it as red, because a CI that could not run gave no verdict on the Linux job local cannot reproduce, and `release.sh --skip-ci-check` stays the loud way past.
+
 ## v0.45.3 — A ship installs its release; bench nodes draw their own clock and say which panels are linked
 
 - **A clock node draws its own clock, not the menubar's tile (DV.CLOCKTHUMB).** The daemon echoed the 36 px PNG the GUI records for the menubar as the `activity` event's `preview`, the field a live job's frame rides in, and the bench drew it: a blurred, upscaled clock on the Ditoo node. `set_device_activity`'s echo now says `preview_is: "thumbnail"`, and the node keeps the shared renderer's render at its own size; a live job's frame still draws.

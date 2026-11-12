@@ -5,25 +5,25 @@ goh refused divoom-control ("tags releases but declares no GOH_SHIP_RELEASE"). T
 places, cut CHANGELOG's Unreleased, commit, push (release.sh refuses a tag off origin/main), wait for
 that commit's CI, and only then exec release.sh.
 
-SEAMS: `gh` on PATH is the CI door (a stub here, serving canned check runs), and `scripts/release.sh` in
-the fixture is a stub that records when it ran and the version it read. Nothing here touches GitHub, tags
-or builds a DMG.
+SEAMS: DIVOOM_LOOPCTL names the CI door (a stub here, answering loopctl's exit codes), and
+`scripts/release.sh` in the fixture is a stub that records when it ran and the version it read. Nothing
+here touches GitHub, tags or builds a DMG.
 
-DV.CIADVISORY (owner, 2026-11-11: "we're not hostage to github's capacity"): the macOS `gate` job runs
-the same ./tools/gate.sh the pre-push gate already passed, so it is advisory (reported, never blocking);
-`linux-all-features`, which local cannot reproduce, still blocks while pending or red. Both directions
-are rows below, for this kit and for release.sh's own ci_gate.
+DV.CIDOOR: both scripts read CI only through `loopctl.py ci SHA --repo divoom-control` (`--wait` in the
+kit, one read in release.sh's ci_gate). loopctl judges the jobs, with .gatesrc's LOOP_CI_ADVISORY
+naming the macOS `gate` job as reported-never-blocking (DV.CIADVISORY); its own tests pin that
+judgement, these pin the call and every exit code: 0 green, 1 red or unread, 3 pending, 4 no CI,
+75 throttled. Only 0 releases.
 
-TEETH (each watched red): make `gate` blocking again and the advisory rows go red; make it ignore a red
-Linux job and the blocking rows go red; drop the `git push` and the pushed-sha rows go red; call release.sh before
-the CI wait and the ordering row goes red; ignore the CI helper's exit code and the red-CI and throttled
-rows go red; drop a crate from bump_version.CRATES and the version-places rows go red; delete the two
+TEETH (each watched red): treat exit 3 or 4 as green and the not-green rows go red; drop `--wait` and
+the call-shape row goes red; drop the `git push` and the pushed-sha rows go red; call release.sh before
+the CI wait and the ordering row goes red; ignore the door's exit code and the not-green and throttled
+rows go red; drop a crate from bump_version.CRATES and the version-places rows go red; delete the
 .gatesrc lines and the declaration rows go red.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
@@ -61,23 +61,25 @@ REPO="o/n"
 V="$(sed -n 's/^version = "\\(.*\\)"/\\1/p' pyproject.toml)"
 echo "release.sh $V" >> "$STUB_LOG"
 """
-# `gh api repos/o/n/commits/SHA/check-runs`: serves STUB_CHECKS (files joined by ":", one per call, the
-# last repeating) or, when STUB_GH_ERR is set, that text on stderr with exit 1 (a throttled GitHub).
-GH_STUB = """#!/usr/bin/env python3
+# DV.CIDOOR: loopctl's CI door, stubbed. It records its argv and answers with the exit codes in STUB_CI_RC
+# (":"-joined, one per call, the last repeating): 0 green, 1 red or unread, 3 pending, 4 no CI, 75 throttled.
+LOOPCTL_STUB = """#!/usr/bin/env python3
 import os, sys
-if sys.argv[1:2] == ["auth"]:
-    sys.exit(0)
 with open(os.environ["STUB_LOG"], "a") as f:
-    f.write("gh " + " ".join(sys.argv[1:]) + "\\n")
-if os.environ.get("STUB_GH_ERR"):
-    sys.stderr.write(os.environ["STUB_GH_ERR"] + "\\n")
-    sys.exit(1)
-files = os.environ["STUB_CHECKS"].split(":")
-counter = os.environ["STUB_CHECKS"].split(":")[0] + ".n"
+    f.write("loopctl " + " ".join(sys.argv[1:]) + "\\n")
+codes = os.environ["STUB_CI_RC"].split(":")
+counter = os.environ["STUB_LOG"] + ".n"
 n = int(open(counter).read()) if os.path.exists(counter) else 0
 open(counter, "w").write(str(n + 1))
-sys.stdout.write(open(files[min(n, len(files) - 1)]).read())
+print("stub verdict " + codes[min(n, len(codes) - 1)])
+sys.exit(int(codes[min(n, len(codes) - 1)]))
 """
+
+
+def loopctl_stub(tmp: Path) -> str:
+    path = tmp / "loopctl.py"
+    path.write_text(LOOPCTL_STUB)
+    return str(path)
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -103,7 +105,7 @@ def work(tmp_path: Path) -> Path:
     git(w, "checkout", "-q", "-b", "main")
     (w / "scripts").mkdir()
     (w / "scripts" / "lib").mkdir()
-    for name in ("ship_release.sh", "bump_version.py", "lib/ci_jobs.py"):
+    for name in ("ship_release.sh", "bump_version.py"):
         shutil.copy(REPO / "scripts" / name, w / "scripts" / name)
     (w / "scripts" / "release.sh").write_text(RELEASE_STUB)
     (w / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "1.0.0"\n')
@@ -118,43 +120,21 @@ def work(tmp_path: Path) -> Path:
     return w
 
 
-def checks(tmp: Path, name: str, **jobs: str | None) -> str:
-    """A check-runs answer file: each job's conclusion, or None for a job still running."""
-    runs = [
-        {"name": job.replace("_", "-"), "status": "completed" if c else "in_progress", "conclusion": c}
-        for job, c in jobs.items()
-    ]
-    path = tmp / f"checks-{name}.json"
-    path.write_text(json.dumps({"check_runs": runs}))
-    return str(path)
-
-
 def ship(
     w: Path,
     version: str,
     *,
-    ci: str | None = None,
-    gh_err: str = "",
+    ci: str = "0",
     summary: str = "the thing is fixed",
-    timeout_s: str = "0.5",
 ) -> subprocess.CompletedProcess[str]:
-    """CI is the check-runs files the stub gh serves (":"-joined); default is both jobs green."""
-    stub = w.parent / "bin"
-    stub.mkdir(exist_ok=True)
-    gh = stub / "gh"
-    gh.write_text(GH_STUB)
-    gh.chmod(0o755)
-    ci = ci or checks(w.parent, "green", gate="success", linux_all_features="success")
+    """CI is the exit codes the stub loopctl answers with (":"-joined); default green."""
     env = {
         **os.environ,
-        "PATH": f"{stub}:{os.environ['PATH']}",
         "GOH_DIR": str(GOH),
         "GOH_SHIP_SUMMARY": summary,
         "STUB_LOG": str(w.parent / "stub.log"),
-        "STUB_CHECKS": ci,
-        "STUB_GH_ERR": gh_err,
-        "DIVOOM_CI_POLL_S": "0.05",
-        "DIVOOM_CI_TIMEOUT_S": timeout_s,
+        "STUB_CI_RC": ci,
+        "DIVOOM_LOOPCTL": loopctl_stub(w.parent),
         "NO_COLOR": "1",
     }
     return subprocess.run(
@@ -192,7 +172,7 @@ def test_pushes_the_release_commit_then_waits_for_its_ci_then_releases(work):
     assert r.returncode == 0, out(r)
     head = git(work, "rev-parse", "HEAD")
     assert git(work, "rev-parse", "origin/main") == head == git(work.parent / "origin.git", "rev-parse", "main")
-    assert log(work) == [f"gh api repos/o/n/commits/{head}/check-runs", "release.sh 1.0.1"]
+    assert log(work) == [f"loopctl ci {head} --repo divoom-control --wait", "release.sh 1.0.1"]
 
 
 def test_a_resumed_ship_does_not_bump_twice(work):
@@ -208,70 +188,37 @@ def released(work: Path) -> bool:
     return any(line.startswith("release.sh") for line in log(work))
 
 
-def test_red_ci_stops_before_release(work):
-    r = ship(work, "1.0.1", ci=checks(work.parent, "red", gate="success", linux_all_features="failure"))
-    assert r.returncode == 1
-    assert "CI is not green" in out(r)
-    assert "linux-all-features" in out(r)
+@pytest.mark.parametrize(("rc", "says"), [("1", "red"), ("3", "pending"), ("4", "no CI")])
+def test_a_ci_that_is_not_green_stops_before_release(work, rc, says):
+    """loopctl's door: 1 red or unread, 3 still pending when --wait's bound ran out, 4 no CI at all
+    (this repo HAS CI, so a commit without any is no verdict). None of them is a green."""
+    r = ship(work, "1.0.1", ci=rc)
+    assert r.returncode == 1, out(r)
+    assert "CI is not green" in out(r) and says in out(r)
+    assert "stub verdict " + rc in out(r)  # loopctl's own verdict line reaches the log
     assert not released(work)
 
 
 def test_throttled_github_is_exit_75_not_a_green(work):
-    r = ship(work, "1.0.1", gh_err="gh: API rate limit exceeded for user (HTTP 403)")
+    r = ship(work, "1.0.1", ci="75")
     assert r.returncode == 75
     assert "throttled" in out(r)
     assert not released(work)
 
 
-# ── DV.CIADVISORY: the macOS `gate` job duplicates the local gate; only the Linux job can block ────────
-
-
-@pytest.mark.parametrize("gate", [None, "failure", "cancelled"])
-def test_an_advisory_gate_job_never_blocks_a_ship(work, gate):
-    """The 0.45.2 and 0.45.3 ships sat on GitHub's slow macOS runner; it is reported, not waited for."""
-    ci = checks(work.parent, "adv", gate=gate, linux_all_features="success")
-    r = ship(work, "1.0.1", ci=ci)
-    assert r.returncode == 0, out(r)
-    assert released(work)
-    assert "advisory" in out(r) and "gate" in out(r)
-
-
-@pytest.mark.parametrize("linux", [None, "failure"])
-def test_the_linux_job_blocks_a_ship_whatever_the_gate_job_says(work, linux):
-    ci = checks(work.parent, "lin", gate="success", linux_all_features=linux)
-    r = ship(work, "1.0.1", ci=ci)
-    assert r.returncode == 1, out(r)
-    assert not released(work)
-    assert "linux-all-features" in out(r)
-
-
-def test_a_pending_linux_job_is_waited_for_then_released(work):
-    pending = checks(work.parent, "p", gate=None, linux_all_features=None)
-    done = checks(work.parent, "d", gate=None, linux_all_features="success")
-    r = ship(work, "1.0.1", ci=f"{pending}:{done}", timeout_s="5")
-    assert r.returncode == 0, out(r)
-    assert sum(line.startswith("gh ") for line in log(work)) == 2
-    assert released(work)
-
-
-def test_a_commit_with_no_linux_job_yet_is_not_a_green(work):
-    r = ship(work, "1.0.1", ci=checks(work.parent, "g", gate="success"))
-    assert r.returncode == 1
-    assert not released(work)
-
-
-def test_the_advisory_job_names_are_declared_once_with_the_owners_ruling():
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("ci_jobs", REPO / "scripts" / "lib" / "ci_jobs.py")
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    assert set(mod.ADVISORY) == {"gate"}
-    assert "hostage to github's capacity" in mod.RULING
-    for script in ("ship_release.sh", "release.sh"):
-        text = (REPO / "scripts" / script).read_text()
-        assert "ci_jobs.py" in text and "ADVISORY =" not in text and '"gate"' not in text and "'gate'" not in text
+def test_the_ci_door_is_loopctl_and_the_advisory_job_is_declared_in_gatesrc():
+    """DV.CIDOOR: the jobs are judged by loopctl, which reads .gatesrc's LOOP_CI_ADVISORY; the
+    scripts name no job and no GitHub API path, and the old reader is gone."""
+    assert not (REPO / "scripts" / "lib" / "ci_jobs.py").exists()
+    script = '. ./.gatesrc >/dev/null 2>&1; printf "%s" "$LOOP_CI_ADVISORY"'
+    done = subprocess.run(
+        ["bash", "-c", script], cwd=REPO, capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL
+    )
+    assert done.stdout == "gate: runs the same ./tools/gate.sh the local pre-push gate already passed"
+    for name in ("ship_release.sh", "release.sh"):
+        text = (REPO / "scripts" / name).read_text()
+        assert "loopctl.py" in text and " ci " in text and "--repo divoom-control" in text
+        assert "check-runs" not in text and "ci_jobs" not in text and '"gate"' not in text
 
 
 def test_refuses_a_dirty_tree_before_changing_anything(work):
@@ -342,14 +289,15 @@ def release(w: Path, ci: str) -> subprocess.CompletedProcess[str]:
     stub = w.parent / "bin"
     stub.mkdir(exist_ok=True)
     gh = stub / "gh"
-    gh.write_text(GH_STUB)
+    gh.write_text("#!/bin/sh\nexit 0\n")  # preflight's `gh auth status` only
     gh.chmod(0o755)
     env = {
         **os.environ,
         "PATH": f"{stub}:{os.environ['PATH']}",
         "GOH_DIR": str(GOH),
         "STUB_LOG": str(w.parent / "stub.log"),
-        "STUB_CHECKS": ci,
+        "STUB_CI_RC": ci,
+        "DIVOOM_LOOPCTL": loopctl_stub(w.parent),
         "DIVOOM_RELEASE_CI_ONLY": "1",
         "NO_COLOR": "1",
     }
@@ -359,23 +307,18 @@ def release(w: Path, ci: str) -> subprocess.CompletedProcess[str]:
     )  # fmt: skip
 
 
-@pytest.mark.parametrize("gate", [None, "failure"])
-def test_release_sh_does_not_block_on_an_advisory_gate_job(release_work, gate):
-    r = release(release_work, checks(release_work.parent, "a", gate=gate, linux_all_features="success"))
+def test_release_sh_asks_the_door_once_and_proceeds_on_green(release_work):
+    r = release(release_work, "0")
     assert r.returncode == 0, out(r)
-    assert "advisory" in out(r) and "gate" in out(r)
+    head = git(release_work, "rev-parse", "HEAD")
+    assert log(release_work) == [f"loopctl ci {head} --repo divoom-control"]
 
 
-def test_release_sh_refuses_a_red_linux_job(release_work):
-    r = release(release_work, checks(release_work.parent, "r", gate="success", linux_all_features="failure"))
-    assert r.returncode == 1, out(r)
-    assert "linux-all-features" in out(r)
-
-
-def test_release_sh_refuses_a_pending_linux_job(release_work):
-    r = release(release_work, checks(release_work.parent, "p", gate="success", linux_all_features=None))
-    assert r.returncode == 1, out(r)
-    assert "still running" in out(r)
+@pytest.mark.parametrize(("rc", "code"), [("1", 1), ("3", 1), ("4", 1), ("75", 75)])
+def test_release_sh_refuses_a_ci_that_is_not_green(release_work, rc, code):
+    r = release(release_work, rc)
+    assert r.returncode == code, out(r)
+    assert "stub verdict " + rc in out(r)
 
 
 def test_gatesrc_declares_the_kit_the_way_goh_reads_it():
