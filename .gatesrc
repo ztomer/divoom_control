@@ -248,3 +248,6 @@ GOH_PY_LINT_CEILINGS=tools/py_lint_ceilings.json
 # pinned interpreter (.python-version, the one CI's setup-python provisions) makes the verdict the
 # same with or without a .venv; tests/test_py_gate_ignores_stray_venv.py holds it.
 GOH_PY_RUNNER="python$(tr -d '[:space:]' <.python-version) -m"
+
+# Roadmap file the goh roadmap gate checks (GOH.ROADMAPREQ).
+GOH_ROADMAP=docs/ROADMAP.md
