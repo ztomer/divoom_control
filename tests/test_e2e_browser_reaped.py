@@ -37,6 +37,7 @@ from pathlib import Path
 
 import pytest
 
+from divoom_lib.utils.plural import counted
 from tests.support import browser as B
 from tests.support import browser_reaper as R
 
@@ -228,7 +229,7 @@ def test_a_failing_test_leaves_no_browser(tmp_path, inner_homes):
     assert home, out
     assert code == 1, out  # it failed, as written
     left = R.under_home(home, R.table())
-    assert left == [], f"{len(left)} camoufox process(es) outlived the session:\n{out}"
+    assert left == [], f"{counted(len(left), 'camoufox process', 'camoufox processes')} outlived the session:\n{out}"
 
 
 def test_a_killed_run_is_cleaned_at_the_next_session_start(tmp_path, inner_homes):
@@ -250,4 +251,4 @@ def test_a_killed_xdist_worker_is_cleaned_when_its_session_ends(tmp_path, inner_
     assert home, out
     assert code != 0, out
     left = R.under_home(home, R.table())
-    assert left == [], f"{len(left)} camoufox process(es) outlived the session:\n{out}"
+    assert left == [], f"{counted(len(left), 'camoufox process', 'camoufox processes')} outlived the session:\n{out}"

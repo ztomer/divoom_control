@@ -7,9 +7,9 @@ module-private colour constants in the house TUI (`tui/lib.py` exports them as
 `tools/check_scripts.py` — the gate that exists so `scripts/` is not unverified
 tooling — only checked that a script PARSES. A file with a NameError in it
 parses perfectly. So the gate was green, the script was broken, and the
-symptom was a run that reported "4 device(s)" and then died in the reporting:
+symptom was a run that reported "4 devices" and then died in the reporting:
 
-    ✓ 4 device(s):
+    ✓ 4 devices:
     ✗ scan failed: NameError: name '_GRAY' is not defined
 
 The scan had WORKED. The four panels had answered. The report of that fact

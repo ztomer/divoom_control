@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok  # noqa: E402
+from _tui import counted, err, info, ok
 
 REPO = Path(__file__).resolve().parent.parent
 PY = REPO / "divoom_lib" / "hotchannel_config.py"
@@ -212,7 +212,7 @@ def main() -> int:
         problems.append(f"the fallback gallery differs: python={py_classify!r} rust={rs_classify!r}")
 
     if problems:
-        err(f"[hotchannel-parity] {len(problems)} divergence(s) in hotchannel.json")
+        err(f"[hotchannel-parity] {counted(len(problems), 'divergence')} in hotchannel.json")
         for p in problems:
             info(p)
         info("One file, two parsers: they must agree or the settings card lies.")

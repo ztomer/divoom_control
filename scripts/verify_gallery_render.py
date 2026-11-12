@@ -43,7 +43,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
-from _tui import err, hr, info, ok, section, warn  # noqa: E402
+from _tui import counted, err, hr, info, ok, section, warn  # noqa: E402
 
 from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # noqa: E402
 
@@ -144,7 +144,10 @@ def main() -> int:
     cats = [int(c) for c in args.cats.split(",") if c.strip()] or CLASSIFY
     client = require_daemon(args.socket)
 
-    section(f"gallery render check — {len(cats)} categor(ies), {args.limit} file(s) each, via the daemon's decoder")
+    section(
+        f"gallery render check — {counted(len(cats), 'category', 'categories')}, "
+        f"{counted(args.limit, 'file')} each, via the daemon's decoder"
+    )
 
     total = total_blank = 0
     for classify in cats:
@@ -162,7 +165,7 @@ def main() -> int:
     if not total:
         warn("nothing was checked — is the account configured?")
         return 1
-    (err if total_blank else ok)(f"{total} asset(s) checked, {total_blank} blank")
+    (err if total_blank else ok)(f"{counted(total, 'asset')} checked, {total_blank} blank")
     return 1 if total_blank else 0
 
 

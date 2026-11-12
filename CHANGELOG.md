@@ -6,6 +6,9 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **CI judges the changelog against the tags (DV.FETCHDEPTH).** Both checkouts of this repository in `.github/workflows/tests.yml` set `fetch-depth: 0` and `fetch-tags: true`, so `goh changelog-tags` compares CHANGELOG.md with the repository's real `v*` tags instead of printing NOT JUDGED on a shallow clone; the workflow's gates_of_heck moves from `v0.96.0` to the named release `v0.101.1`. `tests/test_ci_checkout_depth.py` pins both.
+- **A count meets its noun (DV.HEDGE).** Every message that wrote `file(s)` or `device(s)` (about 70 sites across the library, client, GUI, daemon, gates, scripts and tests) names the count with its noun (`1 file`, `3 files`): `divoom_lib/utils/plural.py` and `divoomd/src/plural.rs` are the shipped code's dependency-free twins of goh's `counted`/`noun`, and the gates take goh's own through `tools/_tui.py`. `plural_hedge_seed.json` is deleted: `goh plural-hedge` finds nothing. Pinned by `tests/test_plural.py` and `divoomd/src/plural_tests.rs`.
+
 ## v0.45.4 — A covered window keeps its page; the hot list says when it loaded; CI read through loopctl
 
 - **A covered window keeps its page however long it stays covered (DV.BGLAUNCH, reopened).** 0.45.3 turned WebKit's occlusion detection off for the first show and back on after two frames; with it back on, a covered Control Center is a hidden page and WebKit lets go of what it painted: the ship's own `open -g` window was blank 37 minutes later (7 colours), and a fresh one that drew 2381 colours at 15 s was blank again ~20 minutes into being covered. Detection now stays off for the window's life, and the throttling it gave is the app's own: an NSWindow occlusion observer tells the page (`window.__divoomCovered`, `divoom:window-covered`), and the bench's render loop stops while covered and resumes when seen (`web_ui/window_covered.js`). Pinned by `tests/test_first_paint.py`.

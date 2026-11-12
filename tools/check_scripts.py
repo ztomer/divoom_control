@@ -50,9 +50,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
-from _undefined_names import undefined_names_in_file  # noqa: E402
+from _empty_scope import scope_is_empty
+from _tui import counted, err, info, ok
+from _undefined_names import undefined_names_in_file
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "scripts"
@@ -310,7 +310,7 @@ def main() -> int:
     if scope_is_empty("scripts", n, unit="scripts"):
         return 1
     if failures:
-        err(f"[scripts] {len(failures)} problem(s) in {n} scripts")
+        err(f"[scripts] {counted(len(failures), 'problem')} in {counted(n, 'script')}")
         for f in failures:
             info(f)
         return 1

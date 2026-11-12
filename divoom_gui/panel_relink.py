@@ -26,6 +26,8 @@ import logging
 import threading
 import time
 
+from divoom_lib.utils.plural import counted
+
 logger = logging.getLogger("divoom_gui")
 
 # get_status reports whole seconds; two readings of one instance can differ by
@@ -65,7 +67,7 @@ def after_ensure(host, client) -> bool:
         return False
     if abs(started - previous) <= SAME_INSTANCE_TOLERANCE_S:
         return False
-    logger.info("Daemon was respawned; relinking %d panel(s): %s", len(held), ", ".join(held))
+    logger.info("Daemon was respawned; relinking %s: %s", counted(len(held), "panel"), ", ".join(held))
     t = threading.Thread(target=_relink, args=(host, client, held), name="divoom-relink", daemon=True)
     host._relink_thread = t
     t.start()

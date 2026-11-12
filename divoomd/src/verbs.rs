@@ -192,7 +192,8 @@ fn parse_verb(verb: &str, args: &[String]) -> Result<VerbRequest, String> {
             Ok(())
         } else {
             Err(format!(
-                "{verb}: expected {n} value(s), got {}",
+                "{verb}: expected {}, got {}",
+                crate::plural::counted(n, "value"),
                 positional.len()
             ))
         }

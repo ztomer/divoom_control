@@ -6,7 +6,7 @@ with the house TUI's module-private colour names (`_GRAY`, `_DIM`, `_BOLD`,
 every code path that PRINTED a result raised NameError. The scan worked — four
 panels answered — and the reporting of that fact died:
 
-    ✓ 4 device(s):
+    ✓ 4 devices:
     ✗ scan failed: NameError: name '_GRAY' is not defined
 
 Worse, the raise was caught and reported as a warning, so the script exited 0:
@@ -43,7 +43,7 @@ from tui.lib import info, step, ok, err, warn
 
 
 def discover(c, timeout):
-    ok("4 device(s):")
+    ok("4 devices:")
     for d in c:
         step(f"{d['name']}  {_GRAY}{d['address']}{_RESET}")
     return c

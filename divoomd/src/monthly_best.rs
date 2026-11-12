@@ -297,8 +297,8 @@ pub async fn run_cycle(daemon: &Daemon) -> CycleOutcome {
     }
 
     println!(
-        "divoomd: {} device(s) from the app's settings: {}",
-        devices.len(),
+        "divoomd: {} from the app's settings: {}",
+        crate::plural::counted(devices.len(), "device"),
         devices
             .iter()
             .map(|d| d.address.as_str())
@@ -356,21 +356,23 @@ pub async fn report_cycle(outcome: &CycleOutcome) {
         let files: usize = outcome.devices.iter().map(|d| d.files).sum();
         let warned: usize = outcome.devices.iter().map(|d| d.warnings.len()).sum();
         println!(
-            "divoomd: monthly best cycle finished: {pushed} of {files} file(s) shown and \
-             {stored} stored in {} device(s)' own gallery.",
-            outcome.devices.len()
+            "divoomd: monthly best cycle finished: {pushed} of {} shown and \
+             {stored} stored across {}.",
+            crate::plural::counted(files, "file"),
+            crate::plural::counted(outcome.devices.len(), "device")
         );
         if warned > 0 {
             println!(
-                "divoomd: {warned} file(s) could not be shown (the device was reached): \
-                 the lines above name each file and the reason."
+                "divoomd: {} could not be shown (the device was reached): \
+                 the lines above name each file and the reason.",
+                crate::plural::counted(warned, "file")
             );
         }
         if previous.as_deref() == Some("failed") {
             let body = format!(
-                "The monthly best push works again: {} device(s), {pushed} file(s) shown, \
-                 {stored} stored.",
-                outcome.devices.len()
+                "The monthly best push works again: {}, {} shown, {stored} stored.",
+                crate::plural::counted(outcome.devices.len(), "device"),
+                crate::plural::counted(pushed, "file")
             );
             notify(
                 "divoom: monthly best RECOVERED",

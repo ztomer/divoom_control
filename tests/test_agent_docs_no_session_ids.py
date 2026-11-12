@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from divoom_lib.utils.plural import noun
+
 ROOT = Path(__file__).resolve().parent.parent
 ENTRY_DOCS = ("AGENTS.md", "CLAUDE.md")
 SESSION_ID = re.compile(r"\bses_[0-9A-Za-z]{20,}")
@@ -33,7 +35,7 @@ def _read(name: str) -> str:
 def test_entry_doc_names_no_opencode_session_id(name):
     hits = SESSION_ID.findall(_read(name))
     assert hits == [], (
-        f"{name} hard-codes opencode session id(s) {hits}; ids die with their "
+        f"{name} hard-codes opencode session {noun(len(hits), 'id')} {hits}; ids die with their "
         "session. Say `opencode session list` (newest first), then "
         "`opencode export <id>`."
     )

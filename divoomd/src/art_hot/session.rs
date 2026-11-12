@@ -56,7 +56,10 @@ pub(super) async fn run_hot_session(
     let dbg = debug_on();
     let vendors = send_manifest(ble, files).await?;
     if dbg {
-        eprintln!("[hot] sent 0x9B manifest: {vendors} vendor(s), {ok_dl} files downloaded");
+        eprintln!(
+            "[hot] sent 0x9B manifest: {}, {ok_dl} files downloaded",
+            crate::plural::counted(vendors, "vendor")
+        );
     }
 
     let mut served: Vec<Value> = Vec::new();

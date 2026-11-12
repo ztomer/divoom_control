@@ -18,6 +18,7 @@ Losing colour is acceptable; refusing to check anything is not.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -41,9 +42,9 @@ def _load():
         if (d / "tui" / "lib.py").is_file():
             sys.path.insert(0, str(d))
             try:
-                from tui.lib import err, hr, info, ok, section, warn  # noqa
+                from tui.lib import counted, err, hr, info, noun, ok, section, warn
 
-                return err, info, ok, warn, hr, section
+                return err, info, ok, warn, hr, section, counted, noun
             except Exception:
                 sys.path.pop(0)
 
@@ -69,7 +70,15 @@ def _load():
         print(f"  {title}")
         _hr()
 
-    return _err, _info, _ok, _warn, _hr, _section
+    # The count/noun helpers are the repo's own dependency-free twin of goh's (DV.HEDGE), loaded by
+    # path so a fallback run needs neither goh nor the divoom_lib package import.
+    spec = importlib.util.spec_from_file_location(
+        "_divoom_plural", Path(__file__).resolve().parent.parent / "divoom_lib" / "utils" / "plural.py"
+    )
+    plural = importlib.util.module_from_spec(spec)
+    sys.modules["_divoom_plural"] = plural  # @dataclass-style loaders look the module up here
+    spec.loader.exec_module(plural)
+    return _err, _info, _ok, _warn, _hr, _section, plural.counted, plural.noun
 
 
-err, info, ok, warn, hr, section = _load()
+err, info, ok, warn, hr, section, counted, noun = _load()

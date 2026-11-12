@@ -1,7 +1,10 @@
 import asyncio
 import logging
-from bleak import BleakScanner, BleakClient
+
+from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
+
+from divoom_lib.utils.plural import counted
 
 logger = logging.getLogger(__name__)
 
@@ -264,5 +267,5 @@ async def discover_all_divoom_devices(timeout: float = 5.0, expected: int = 0) -
             logger.warning("scanner stop failed/timed out: %s", e)
 
     results = list(found.values())
-    logger.info("Discovered %d Divoom BLE device(s).", len(results))
+    logger.info("Discovered %s.", counted(len(results), "Divoom BLE device"))
     return results

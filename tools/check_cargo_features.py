@@ -69,6 +69,9 @@ import tomllib
 from functools import lru_cache
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _tui import counted
+
 ROOT = Path(__file__).resolve().parent.parent
 INDEX_CACHE = Path.home() / ".cargo/registry/index"
 
@@ -327,7 +330,7 @@ def main() -> int:
 
     if findings:
         print()
-        print(f"✗ {len(findings)} declared cargo feature(s) block an upgrade")
+        print(f"✗ an upgrade is blocked by {counted(len(findings), 'declared cargo feature')}")
         print()
         for dep, target, feat, origin, _ in findings:
             print(f"  {dep} {target} has no feature {feat!r}")
@@ -373,7 +376,7 @@ def main() -> int:
         print("  this gate and the GOH_CI_STEPS entry rather than leave it inert.")
         return 2
 
-    print(f"✓ {checked} declared cargo feature(s) exist at the newest version each manifest allows")
+    print(f"✓ {counted(checked, 'declared cargo feature')} checked at the newest version each manifest allows")
     return 0
 
 

@@ -124,6 +124,9 @@ pub mod panel_screens;
 pub mod paths;
 #[cfg(test)]
 mod pixel_art_native_tests;
+pub mod plural;
+#[cfg(test)]
+mod plural_tests;
 pub mod preview_url;
 pub mod protocol;
 pub mod render_widget;

@@ -35,9 +35,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _empty_scope import scope_is_empty  # noqa: E402
-from _srcscan import strip_rust_comments  # noqa: E402
-from _tui import err, info, ok  # noqa: E402
+from _empty_scope import scope_is_empty
+from _srcscan import strip_rust_comments
+from _tui import counted, err, info, ok
 
 REPO = Path(__file__).resolve().parent.parent
 TARGET = Path("divoomd/src/socket_server.rs")
@@ -137,7 +137,7 @@ def main() -> int:
     for sub in submodules():
         found += [(sub.relative_to(REPO), ln) for ln in audit_submodule(sub.read_text())]
     if found:
-        err(f"[bounded-writes] {len(found)} unbounded write(s) in the socket server")
+        err(f"[bounded-writes] {counted(len(found), 'unbounded write')} in the socket server")
         for where, ln in found:
             info(
                 f"{where}:{ln}: write_all outside `write_line` — a peer that stops "
@@ -148,8 +148,8 @@ def main() -> int:
     if scope_is_empty("bounded-writes", total, unit="write sites"):
         return 1
     ok(
-        f"[bounded-writes] OK — {total} write site(s), all inside the WRITE_TIMEOUT seam; "
-        f"{len(submodules())} submodule(s) hold none"
+        f"[bounded-writes] OK — {counted(total, 'write site')}, all inside the WRITE_TIMEOUT seam; "
+        f"{counted(len(submodules()), 'submodule')} hold none"
     )
     return 0
 

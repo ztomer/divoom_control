@@ -64,8 +64,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok, warn  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _tui import counted, err, info, ok, warn
 
 REPO = Path(__file__).resolve().parent.parent
 # The app's bundle id is com.divoom.control; a job of this repo's carries a
@@ -428,15 +428,15 @@ def main() -> int:
         warn(f"[launchd-jobs] {w}")
     if findings:
         err(
-            f"[launchd-jobs] {len(findings)} finding(s) — "
-            f"{counts['declared']} declared job(s), {counts['mine']} of this "
+            f"[launchd-jobs] {counted(len(findings), 'finding')} — "
+            f"{counted(counts['declared'], 'declared job')}, {counts['mine']} of this "
             f"repo's installed"
         )
         for f in findings:
             info(f"  {f}")
         return 1
     ok(
-        f"[launchd-jobs] OK — {counts['declared']} declared job(s), "
+        f"[launchd-jobs] OK — {counted(counts['declared'], 'declared job')}, "
         f"{counts['mine']} of this repo's installed, none dead, and the checker "
         f"proved it can see one"
     )

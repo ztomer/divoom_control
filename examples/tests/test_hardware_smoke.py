@@ -4,15 +4,18 @@
 Tests TERMINATE removal (R35): runs once per device and reports PASS.
 """
 
-import sys
-import os
 import asyncio
+import os
+import sys
 import tempfile
+
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from divoom_legacy import Divoom
+
+from divoom_lib.utils.plural import counted
 
 
 def make_test_gif() -> str:
@@ -54,7 +57,7 @@ async def main():
         print("FAIL: no Divoom devices found")
         sys.exit(1)
 
-    print(f"\nSmoke-testing {len(devices)} device(s)")
+    print(f"\nSmoke-testing {counted(len(devices), 'device')}")
     print("=" * 40)
     all_ok = True
     for d in devices:

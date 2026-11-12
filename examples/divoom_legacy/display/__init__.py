@@ -2,18 +2,18 @@
 import asyncio
 import time
 
-from divoom_legacy.display.light import Light
-from divoom_legacy.display.drawing import Drawing
 from divoom_legacy.display.animation import Animation
-from divoom_legacy.display.text import Text
 from divoom_legacy.display.display_animation import DisplayAnimation
 from divoom_legacy.display.display_text import DisplayText
-
-from divoom_legacy.utils.image_processing import process_image
-from divoom_legacy.utils.divoom_image_encode import encode_animation
-from divoom_lib import models as constants
-from divoom_lib.utils.converters import to_int_if_str, bool_to_byte
+from divoom_legacy.display.drawing import Drawing
+from divoom_legacy.display.light import Light
+from divoom_legacy.display.text import Text
 from divoom_legacy.sender_protocol import CommandSender
+from divoom_legacy.utils.divoom_image_encode import encode_animation
+from divoom_legacy.utils.image_processing import process_image
+from divoom_lib import models as constants
+from divoom_lib.utils.converters import bool_to_byte, to_int_if_str
+from divoom_lib.utils.plural import counted
 
 
 class Display:
@@ -202,7 +202,9 @@ class Display:
             blob = _build_animation_blob(frames)
             anim = getattr(self.communicator, "animation", None)
             if blob and anim is not None:
-                self.logger.info(f"show_image: streaming {frames_count} frame(s) via 0x8B 3-phase ({len(blob)} bytes)")
+                self.logger.info(
+                    f"show_image: streaming {counted(frames_count, 'frame')} via 0x8B 3-phase ({len(blob)} bytes)"
+                )
                 if await anim.stream_animation_8b(blob):
                     return True
                 self.logger.warning("show_image: 0x8B stream failed, falling back to 0x49")

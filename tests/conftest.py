@@ -16,13 +16,15 @@ hardware tests are skipped by default. Run them against a real device with::
 import asyncio
 import inspect
 import os
+import pathlib
 import sys
 import threading
-import pathlib
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
+
+from divoom_lib.utils.plural import counted
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
@@ -186,11 +188,12 @@ def pytest_configure(config):
     # repo were refused by `Page.goto: Timeout 30000ms exceeded` on unrelated
     # suites. The patch lives in its own module because the harness file is
     # already at the 500-line cap.
-    from tests.support import navigation_budget  # noqa: F401  (the import IS the patch)
-
     # A browser a test launches is reaped by its owner, pass or fail, and the
     # session sweeps what a killed run left (tests/support/browser_reaper.py).
-    from tests.support import browser_reaper
+    from tests.support import (
+        browser_reaper,
+        navigation_budget,  # noqa: F401  (the import IS the patch)
+    )
 
     browser_reaper.patch_launch()
     browser_reaper.LAUNCH_ALLOWED = browser_support.RUN_BROWSER
@@ -259,7 +262,7 @@ def _no_leaked_device_loop_threads():
             t.join(timeout=2.0)  # brief grace window for its own teardown
         leaked = [t for t in leaked if t.is_alive()]
     assert not leaked, (
-        f"{len(leaked)} 'device-loop' thread(s) survived past test teardown. "
+        f"{counted(len(leaked), 'device-loop thread')} survived past test teardown. "
         "A DeviceOwner was created (directly or via an owner_with_device-style "
         "fixture) without owner.stop() running on a guaranteed teardown path, "
         "or stop() returned before its loop thread fully exited."

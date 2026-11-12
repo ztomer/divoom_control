@@ -49,8 +49,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _tui import counted, err, info, ok
 
 REPO = Path(__file__).resolve().parent.parent
 GUI_DIR = REPO / "divoom_gui"
@@ -218,13 +218,16 @@ def main() -> int:
     # into, and it reads as "still broken" to anyone auditing the list.
     stale = sorted(allowed - used)
     if stale:
-        err(f"[gui-client] {len(stale)} stale allowlist entr(ies) — the code was fixed but the exemption stayed")
+        err(
+            f"[gui-client] {counted(len(stale), 'stale allowlist entry', 'stale allowlist entries')}"
+            " — the code was fixed but the exemption stayed"
+        )
         for rel, kind, symbol in stale:
             info(f"divoom_gui/{rel} — {kind} `{symbol}` no longer occurs; delete it from ALLOWLIST")
         return 1
 
     if offenders:
-        err(f"[gui-client] {len(offenders)} violation(s) — the GUI is doing the daemon's work")
+        err(f"[gui-client] {counted(len(offenders), 'violation')} — the GUI is doing the daemon's work")
         for o in offenders:
             info(o)
         info("The GUI is a client. Ask divoomd; do not reimplement it.")

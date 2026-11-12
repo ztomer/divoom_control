@@ -58,21 +58,21 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "scripts"))
-from _tui import err, hr, info, ok, section, warn  # noqa: E402
-
-from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # noqa: E402
+from _tui import err, hr, info, noun, ok, section, warn  # noqa: E402
 
 # The packet's checks live in their own module; the runner lives here.
 from hw_packet import (  # noqa: E402  (re-exported for the gates and tests)
+    PANEL_LOOK,
     CallCheck,
     Check,
     CommandCheck,
     Expectation,
     ImageCheck,
     LiveJobCheck,
-    PANEL_LOOK,
     build_checks,
 )
+
+from divoom_client.daemon_protocol import DEFAULT_SOCKET_PATH, DaemonClient  # noqa: E402
 
 PASS, FAIL, SKIP, UNKNOWN = "PASS", "FAIL", "SKIP", "UNKNOWN"
 # A check that is EXPECTED to fail. XFAIL is the expected outcome and carries no
@@ -360,7 +360,7 @@ def main() -> int:
         wanted = set(args.only)
         unknown = wanted - {c.id for c in checks}
         if unknown:
-            err(f"unknown check id(s): {', '.join(sorted(unknown))}")
+            err(f"unknown check {noun(len(unknown), 'id')}: {', '.join(sorted(unknown))}")
             return 2
         checks = [c for c in checks if c.id in wanted]
 

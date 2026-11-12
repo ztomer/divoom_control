@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _tui import err, info, ok, warn  # noqa: E402
+from _tui import counted, err, info, ok, warn
 
 REPO = Path(__file__).resolve().parent.parent
 WEB_UI = REPO / "divoom_gui" / "web_ui"
@@ -194,14 +194,14 @@ def main() -> int:
     # into a place where names go to be forgotten.
     stale = sorted(set(ALLOWLIST) - unreached)
     if stale:
-        err(f"[api-reachable] {len(stale)} stale allowlist entr(ies)")
+        err(f"[api-reachable] {counted(len(stale), 'stale allowlist entry', 'stale allowlist entries')}")
         for name in stale:
             info(f"{name} now HAS a web_ui caller (or no longer exists) — delete it from ALLOWLIST")
         return 1
 
     offenders = sorted(unreached - set(ALLOWLIST))
     if offenders:
-        err(f"[api-reachable] {len(offenders)} API method(s) nothing can call")
+        err(f"[api-reachable] {counted(len(offenders), 'API method')} nothing can call")
         for name in offenders:
             info(f"DivoomGuiAPI.{name} has no reference in divoom_gui/web_ui/")
         info("Wire it up, delete it, or add it to ALLOWLIST with a reason.")

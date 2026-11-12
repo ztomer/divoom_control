@@ -91,7 +91,8 @@ pub fn parse(args: &[String], env_token: Option<String>) -> Outcome {
                 allow_destructive: true,
             }),
             rest => Outcome::Error(format!(
-                "divoomd mcp: unexpected argument(s) {rest:?}; the only flag is --allow-destructive"
+                "divoomd mcp: unexpected {} {rest:?}; the only flag is --allow-destructive",
+                crate::plural::noun(rest.len(), "argument")
             )),
         };
     }

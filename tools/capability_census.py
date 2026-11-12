@@ -50,7 +50,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _tui import err, hr, info, ok, section, warn  # noqa: E402
+from _tui import counted, err, hr, info, ok, section, warn
 
 REPO = Path(__file__).resolve().parent.parent
 RUST = REPO / "divoomd" / "src"
@@ -289,7 +289,7 @@ def main() -> int:
     failed = False
 
     if direct or wrapped:
-        err(f"[capability] {len(direct) + len(wrapped)} site(s) do a job the daemon owns")
+        err(f"[capability] {counted(len(direct) + len(wrapped), 'site')} do a job the daemon owns")
         info("These have no allowlist by design. Route them through the daemon.")
         failed = True
 
@@ -298,7 +298,7 @@ def main() -> int:
     stale = sorted(set(REACHES_ALLOWLIST) - seen)
 
     if unlisted:
-        err(f"[capability] {len(unlisted)} new call(s) into an owned module")
+        err(f"[capability] {counted(len(unlisted), 'new call')} into an owned module")
         for k in unlisted:
             info(f"  {k}")
         info("Decide it in docs/CAPABILITY_MAP.md, then add it here WITH the")
@@ -307,7 +307,7 @@ def main() -> int:
         failed = True
 
     if stale:
-        err(f"[capability] {len(stale)} stale allowlist entr(ies)")
+        err(f"[capability] {counted(len(stale), 'stale allowlist entry', 'stale allowlist entries')}")
         for k in stale:
             info(f"  {k} no longer matches — delete it")
         info("A fixed row must take its exemption with it, or it leaves a hole")

@@ -202,7 +202,7 @@ fn a_device_that_failed_is_a_failed_run() {
         device(
             "B",
             0,
-            Some("the device was reached but none of its 10 file(s) could be shown"),
+            Some("the device was reached but none of its 10 files could be shown"),
         ),
     ];
     let failures = crate::monthly_best::device_failures(&devices);
@@ -225,7 +225,7 @@ fn a_file_that_could_not_be_shown_is_a_warning_not_a_failed_run() {
     let mut warned = device("A", 9, None);
     warned
         .warnings
-        .push("1 of 10 file(s) could not be shown".to_string());
+        .push("1 of 10 files could not be shown".to_string());
     let devices = vec![warned];
     let outcome = crate::monthly_best::fold_devices(devices, Vec::new());
     assert!(
@@ -340,7 +340,7 @@ fn a_device_that_stored_some_of_the_art_is_not_a_failed_run() {
     let (error, warnings) = device_verdict(3, 5, &failures);
     assert!(
         error.is_none(),
-        "a device that stored 3 of 5 file(s) has stored something: {error:?}"
+        "a device that stored 3 of 5 files has stored something: {error:?}"
     );
     assert_eq!(warnings.len(), 1, "the file that did not make it is named");
     assert!(

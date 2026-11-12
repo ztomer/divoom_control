@@ -82,7 +82,8 @@ pub fn device_verdict(
             .join("; ");
         return (
             Some(format!(
-                "the device was reached but none of its {total} file(s) could be stored: {named}"
+                "the device was reached but none of its {} could be stored: {named}",
+                crate::plural::counted(total, "file")
             )),
             Vec::new(),
         );
@@ -414,10 +415,10 @@ async fn store_page(daemon: &Daemon, target: &str, items: &[ArtItem], counts: &m
             counts.failures.extend(store.failures);
             if store.stored > 0 {
                 println!(
-                    "divoomd: stored {} of {} file(s) in the device's own gallery (the \
+                    "divoomd: stored {} of {} in the device's own gallery (the \
                      panel took every packet; no panel answers a read-back, D.DV1)",
                     store.stored,
-                    items.len()
+                    crate::plural::counted(items.len(), "file")
                 );
             }
         }

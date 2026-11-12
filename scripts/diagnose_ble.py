@@ -20,6 +20,8 @@ import asyncio
 import sys
 from pathlib import Path
 
+from divoom_lib.utils.plural import counted
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # The Divoom-filtered scan uses the retired library's discovery helper.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
@@ -48,7 +50,7 @@ async def main() -> None:
 
     print("RAW scan (all BLE, 8s) — this is what your screens must show up in:")
     raw = await BleakScanner.discover(timeout=8.0)
-    print(f"  -> {len(raw)} device(s):")
+    print(f"  -> {counted(len(raw), 'device')}:")
     for d in raw:
         rssi = getattr(d, "rssi", None)
         print(f"     {d.address}  rssi={rssi}  name={d.name!r}")

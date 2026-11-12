@@ -38,6 +38,7 @@ import time
 import urllib.request
 
 from divoom_lib.models import COMMANDS
+from divoom_lib.utils.plural import counted
 
 logger = logging.getLogger("divoom_hot_update")
 
@@ -342,7 +343,7 @@ class HotUpdate:
         }
         if progress_cb:
             progress_cb({"phase": "done", **result})
-        self.logger.info(f"hot: session complete — {len(served)} file(s) served")
+        self.logger.info(f"hot: session complete — {counted(len(served), 'file')} served")
         return result
 
     async def show_hot_channel(self, page: int | None = None) -> bool:

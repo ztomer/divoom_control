@@ -35,9 +35,8 @@ import time
 
 sys.path.insert(0, os.environ.get("GOH_DIR", os.path.expanduser("~/Projects/gates_of_heck")))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tui.lib import err, hr, info, ok, section, warn  # noqa: E402
-
-from daemon_ping import live_daemons  # noqa: E402
+from daemon_ping import live_daemons
+from tui.lib import err, hr, info, noun, ok, section, warn
 
 DEFAULT_SOCKET = "/tmp/divoom.sock"
 DEFAULT_TRACE = "/tmp/divoom_dev_daemon.log"
@@ -434,7 +433,7 @@ def main() -> int:
     names = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
     unknown = [n for n in names if n not in SCENARIOS]
     if unknown:
-        err(f"unknown scenario(s): {', '.join(unknown)}")
+        err(f"unknown {noun(len(unknown), 'scenario')}: {', '.join(unknown)}")
         return 2
 
     results: dict[str, bool] = {}

@@ -36,6 +36,8 @@ GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 [ -f "$GOH/tui/lib.sh" ] && source "$GOH/tui/lib.sh"
 type info >/dev/null 2>&1 || { info() { echo "→ $*"; }; ok() { echo "✓ $*"; }
                                warn() { echo "⚠ $*"; }; err() { echo "✗ $*" >&2; }; }
+# A count meets its noun (goh's tui/plural.sh); the fallback is for a caller with no goh checkout.
+type counted >/dev/null 2>&1 || counted() { if [ "$1" = 1 ]; then printf '%s %s' "$1" "$2"; else printf '%s %s' "$1" "${3:-${2}s}"; fi; }
 
 RUN_DIR="${DIVOOM_IDENTITY_DIR:-$HOME/.config/divoom-control/run}"
 # The endpoints the app owns: the GUI lock (a flock held for the GUI's life; the
@@ -125,5 +127,5 @@ stop_holders "daemon" "$DAEMON_SOCKETS"
 if [ "$stopped" -eq 0 ]; then
     info "[helpers] nothing to stop"
 else
-    ok "[helpers] stopped $stopped helper(s) by identity or by the endpoint they hold"
+    ok "[helpers] stopped $(counted "$stopped" helper) by identity or by the endpoint they hold"
 fi

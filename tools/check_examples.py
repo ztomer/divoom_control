@@ -33,8 +33,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _tui import counted, err, info, ok
 
 REPO = Path(__file__).resolve().parent.parent
 EXAMPLES = REPO / "examples"
@@ -44,7 +44,7 @@ sys.path.insert(0, str(EXAMPLES))
 # The facade imports bleak at module level; this check needs the real
 # classes (it asks has_member on them), so bleak is THIS check's dependency.
 try:
-    import divoom_legacy.divoom as _divoom_mod  # noqa: E402
+    import divoom_legacy.divoom as _divoom_mod
 except ModuleNotFoundError as exc:  # pragma: no cover - environment, not logic
     err(
         f"[examples] cannot import the facade: {exc}. This check needs the package's runtime deps: `pip install -r requirements.txt`."
@@ -179,7 +179,7 @@ def main() -> int:
     if scope_is_empty("examples", len(modules), unit="example modules"):
         return 1
     if failures:
-        err(f"[examples] {len(failures)} problem(s)")
+        err(f"[examples] {counted(len(failures), 'problem')}")
         for fl in failures:
             info(fl)
         return 1

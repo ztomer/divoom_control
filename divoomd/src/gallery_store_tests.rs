@@ -45,8 +45,8 @@ fn the_stored_frames_are_the_frames_the_device_is_shown() {
 
     assert!(
         frames.len() > 1,
-        "an animation must stay an animation in the store: {} frame(s)",
-        frames.len()
+        "an animation must stay an animation in the store: {}",
+        crate::plural::counted(frames.len(), "frame")
     );
     for frame in &frames {
         assert_eq!(

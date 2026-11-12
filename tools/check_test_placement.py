@@ -33,8 +33,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _tui import counted, err, info, ok
 
 REPO = Path(__file__).resolve().parent.parent
 RUST_SRC_DIRS = ("divoomd/src", "divoom-menubar/src", "nowplaying/src")
@@ -141,7 +141,7 @@ def main() -> int:
         )
         return 1
     if failures:
-        err(f"[test-placement] {len(failures)} problem(s)")
+        err(f"[test-placement] {counted(len(failures), 'problem')}")
         for fl in failures:
             info(fl)
         return 1

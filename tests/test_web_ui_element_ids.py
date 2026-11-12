@@ -28,6 +28,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from divoom_lib.utils.plural import noun
+
 UI = Path(__file__).resolve().parent.parent / "divoom_gui" / "web_ui"
 
 # `id="foo"` in markup.
@@ -61,7 +63,7 @@ def test_no_js_reads_an_element_that_nothing_defines():
     have = defined_ids()
     problems = {name: sorted(ids - have) for name, ids in looked_up().items() if ids - have}
     assert not problems, (
-        "web_ui JS reads element id(s) that nothing defines:\n"
+        f"web_ui JS reads {noun(sum(map(len, problems.values())), 'element id')} that nothing defines:\n"
         + "\n".join(f"  {k}: {v}" for k, v in problems.items())
         + "\ngetElementById returns null here, and the `?.` style in this "
         "codebase turns that into a silent false/empty value rather than an "

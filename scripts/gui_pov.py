@@ -48,6 +48,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from divoom_lib.utils.plural import counted
+
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
@@ -333,8 +335,8 @@ async def run(args) -> int:
             print(f"sysmon cpu over ~10s: {samples}  (refresh calls: {refreshes})")
             if args.widget == "sysmon" and refreshes < 2:
                 problems.append(
-                    f"the sysmon live refresh is not running — only {refreshes} "
-                    f"get_system_stats_preview call(s) in ~10s with the widget selected"
+                    f"the sysmon live refresh is not running — only "
+                    f"{counted(refreshes, 'get_system_stats_preview call')} in ~10s with the widget selected"
                 )
 
             if args.kill_daemon:
@@ -368,7 +370,7 @@ async def run(args) -> int:
                     )
 
             if errors:
-                problems.append(f"{len(errors)} page/console error(s): {errors[:3]}")
+                problems.append(f"{counted(len(errors), 'page/console error')}: {errors[:3]}")
             await browser.close()
     finally:
         stack.close()

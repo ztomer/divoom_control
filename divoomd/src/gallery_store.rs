@@ -250,7 +250,8 @@ async fn store_items(
         failures.push(FileFailure {
             name: item.name.clone(),
             reason: format!(
-                "the device's gallery page holds {ITEMS_PER_PAGE} item(s) and this run offered more"
+                "the device's gallery page holds {} and this run offered more",
+                crate::plural::counted(ITEMS_PER_PAGE, "item")
             ),
         });
     }

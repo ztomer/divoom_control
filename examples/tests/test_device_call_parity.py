@@ -18,6 +18,8 @@ import re
 
 import pytest
 
+from divoom_lib.utils.plural import counted
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RUST_DEVICE_CALL_DIR = REPO_ROOT / "divoomd" / "src" / "device_call"
 
@@ -93,4 +95,6 @@ def test_device_call_parity():
     assert python_methods, "facade enumeration produced no methods"
 
     gaps = sorted(python_methods - rust_keys - ALLOWLIST)
-    assert not gaps, f"{len(gaps)} Python facade method(s) have no Rust device_call handler: " + ", ".join(gaps)
+    assert not gaps, f"{counted(len(gaps), 'Python facade method')} without a Rust device_call handler: " + ", ".join(
+        gaps
+    )

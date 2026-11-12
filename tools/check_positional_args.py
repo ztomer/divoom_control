@@ -31,9 +31,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _srcscan import strip_rust_comments  # noqa: E402
-from _tui import err, info, ok  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _srcscan import strip_rust_comments
+from _tui import counted, err, info, ok
 
 REPO = Path(__file__).resolve().parent.parent
 RUST_DIR = REPO / "divoomd" / "src" / "device_call"
@@ -188,7 +188,7 @@ def main() -> int:
                 break
 
     if offenders:
-        err(f"[positional] {len(offenders)} handler(s) index the COMPACTED args list")
+        err(f"[positional] the COMPACTED args list is indexed by {counted(len(offenders), 'handler')}")
         for o in offenders:
             info(o)
         return 1

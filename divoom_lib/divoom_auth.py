@@ -16,10 +16,12 @@ import hashlib
 import hmac
 import json
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from divoom_lib.utils.plural import counted
 
 
 def print_info(message):
@@ -45,7 +47,7 @@ def _redact(secret) -> str:
     s = str(secret or "")
     if len(s) <= 4:
         return "****"
-    return f"{s[:4]}…({len(s)} chars)"
+    return f"{s[:4]}…({counted(len(s), 'char')})"
 
 
 BASE_URL = "https://appin.divoom-gz.com"

@@ -32,6 +32,8 @@ sys.path.append(str(ROOT))
 from divoom_legacy.divoom import Divoom
 from divoom_legacy.utils import discovery
 
+from divoom_lib.utils.plural import counted  # noqa: E402
+
 
 # Global logging helper functions required by project rules
 def print_info(message):
@@ -83,7 +85,7 @@ async def resolve_targets(args) -> list[tuple[str, str]]:
                                 continue
                             targets.append((addr, name))
                     if targets:
-                        print_info(f"Resolved {len(targets)} device(s) from discovery cache: {cache_path}")
+                        print_info(f"Resolved {counted(len(targets), 'device')} from discovery cache: {cache_path}")
                         return targets
         except Exception as e:
             print_wrn(f"Failed to read discovery cache: {e}")
@@ -187,7 +189,10 @@ async def main_async():
         )
         sys.exit(1)
 
-    print_info(f"Found {len(targets)} target device(s) to verify: " + ", ".join(f"{n or '?'}({a})" for a, n in targets))
+    print_info(
+        f"Found {counted(len(targets), 'target device')} to verify: "
+        + ", ".join(f"{n or '?'}({a})" for a, n in targets)
+    )
 
     passed_count = 0
     for address, name in targets:
@@ -198,7 +203,7 @@ async def main_async():
 
     print("\n==========================================")
     if passed_count == len(targets):
-        print_ok(f"All {passed_count}/{len(targets)} device(s) verified successfully!")
+        print_ok(f"All {passed_count}/{counted(len(targets), 'device')} verified successfully!")
         sys.exit(0)
     else:
         print_err(f"Verification completed: {passed_count} passed, {len(targets) - passed_count} failed.")

@@ -29,6 +29,7 @@ from pathlib import Path
 
 import pytest
 
+from divoom_lib.utils.plural import counted
 from tests.support.browser import add_init_js, eval_js, launch, require_browser, wait_js
 
 INDEX_HTML = Path(__file__).parent.parent / "divoom_gui" / "web_ui" / "index.html"
@@ -125,7 +126,7 @@ async def test_every_label_and_switch_reads_at_3_to_1(theme):
                 for line in res["bad"]:
                     failures.setdefault(line, tab)
             assert not failures, (
-                f"{len(failures)} element(s) below {MIN_RATIO}:1 in the {theme} theme "
+                f"{counted(len(failures), 'element')} below {MIN_RATIO}:1 in the {theme} theme "
                 "(ratio, element, first tab seen):\n  " + "\n  ".join(f"{k}  [{t}]" for k, t in failures.items())
             )
         finally:
@@ -194,7 +195,7 @@ async def test_the_bench_reads_at_3_to_1_in_every_state(theme, state):
             await wait_js(page, f"() => !!document.getElementById('{marker}')")
             res = await eval_js(page, _PROBE, MIN_RATIO)
             assert not res["bad"], (
-                f"{len(res['bad'])} element(s) below {MIN_RATIO}:1 in the {theme} "
+                f"{counted(len(res['bad']), 'element')} below {MIN_RATIO}:1 in the {theme} "
                 f"theme, bench {state}:\n  " + "\n  ".join(res["bad"])
             )
         finally:

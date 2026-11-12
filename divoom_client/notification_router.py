@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from divoom_lib.models import NOTIFICATION_APPS
+from divoom_lib.utils.plural import counted
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ def load_routing_table(path: Optional[Path] = None) -> list[tuple[str, int]]:
         if not rules:
             logger.warning(f"routing file {p} has no valid entries; using defaults")
             return list(DEFAULT_ROUTING)
-        logger.info(f"loaded {len(rules)} routing rule(s) from {p}")
+        logger.info(f"loaded {counted(len(rules), 'routing rule')} from {p}")
         return rules
     except (OSError, ValueError) as e:
         logger.warning(f"routing file {p} is corrupt ({e}); using defaults")

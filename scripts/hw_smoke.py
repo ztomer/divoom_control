@@ -25,9 +25,9 @@ import os
 import sys
 
 sys.path.insert(0, os.environ.get("GOH_DIR", os.path.expanduser("~/Projects/gates_of_heck")))
-from tui.lib import info, step, ok, err, warn, hr, section
-
 import time
+
+from tui.lib import counted, err, hr, info, ok, section, step, warn
 
 
 class Failures:
@@ -72,7 +72,7 @@ def discover(c, scan_timeout: float, failures: Failures) -> list:
         r = c.scan(timeout=scan_timeout)
         devs = r.get("devices") or r.get("results") or r.get("found") or []
         if devs:
-            ok(f"{len(devs)} device(s):")
+            ok(f"{counted(len(devs), 'device')}:")
             for d in devs:
                 name = d.get("name") if isinstance(d, dict) else d
                 addr = d.get("address") if isinstance(d, dict) else ""
@@ -263,7 +263,7 @@ def stress(
         line += f"  {lo:.1f}/{avg:.1f}/{hi:.1f}s (min/avg/max)"
         (ok if f == 0 else warn)(line)
     if anomalies:
-        err(f"{len(anomalies)} anomaly(ies):")
+        err(f"{counted(len(anomalies), 'anomaly', 'anomalies')}:")
         for m in anomalies:
             step(m)
     else:
@@ -308,7 +308,7 @@ def main() -> int:
         stress(c, devs, args.iterations, args.scan_every, args.fleet, args.churn, failures)
     print()
     if failures:
-        err(f"done — {len(failures)} failure(s) above.")
+        err(f"done — {counted(len(failures), 'failure')} above.")
     else:
         ok("done.")
     return 1 if failures else 0

@@ -72,13 +72,14 @@ from __future__ import annotations
 import ast
 import re
 import subprocess
-import warnings
 import sys
+import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _srcscan import strip_rust_comments  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _srcscan import strip_rust_comments
+from _tui import counted
 
 # Faceless scripting bridges that are always present and are the sanctioned way
 # to address a process by identity. Keep this list at exactly what is needed.
@@ -210,7 +211,7 @@ def main() -> None:
         for name in scan_text(text, p.suffix):
             hits.append(f'{rel}: tell application "{name}" (unguarded)')
     if hits:
-        print(f"✗ [applescript_launch] {len(hits)} unguarded AppleScript app target(s):")
+        print(f"✗ [applescript_launch] {counted(len(hits), 'unguarded AppleScript app target')}:")
         for h in hits[:40]:
             print(f"    {h}")
         print("address the process by identity (System Events + `unix id`), or guard the")

@@ -29,7 +29,7 @@ def main():
     print("ping:", call("ping"))
     r = call("scan", {"timeout": 10})
     devs = r.get("devices", [])
-    print(f"scan: {len(devs)} device(s)")
+    print(f"scan: {len(devs)} device{'' if len(devs) == 1 else 's'}")
     for d in devs:
         print("  ", d.get("name"), d.get("address"))
 

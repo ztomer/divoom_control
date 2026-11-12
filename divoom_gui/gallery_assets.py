@@ -31,6 +31,8 @@ import base64
 import logging
 from pathlib import Path
 
+from divoom_lib.utils.plural import counted
+
 logger = logging.getLogger("divoom_gui")
 
 #: Bumped when the cache's provenance changes. The suffix is the R70 migration:
@@ -61,9 +63,9 @@ def ensure_cache_dir(cache_dir: Path) -> Path:
                 pass
     if removed:
         logger.info(
-            "Gallery cache: cleared %d file(s) written by the old in-GUI decoder; "
+            "Gallery cache: cleared %s written by the old in-GUI decoder; "
             "previews will be re-fetched from the background service.",
-            removed,
+            counted(removed, "file"),
         )
     try:
         stamp.write_text("previews come from divoomd (R70 P2.2)\n", encoding="utf-8")

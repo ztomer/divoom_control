@@ -44,6 +44,8 @@ import json
 import re
 from pathlib import Path
 
+from divoom_lib.utils.plural import counted
+
 #: The keys every device entry carries, so a consumer can rely on the shape.
 ENTRY_KEYS = (
     "id",
@@ -163,7 +165,7 @@ def _line(d: dict) -> str:
         f = d["frame"]
         return (
             f"{label}  {size}  frame {f['width']}x{f['height']} "
-            f"({f['frames']} frame(s), {d['source']}, {d['age_s']:.0f}s ago)"
+            f"({counted(f['frames'], 'frame')}, {d['source']}, {d['age_s']:.0f}s ago)"
         )
     return f"{label}  {size}  {d.get('state')}: {d.get('reason')}"
 

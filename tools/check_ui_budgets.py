@@ -30,8 +30,8 @@ import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _tui import err, info, ok  # noqa: E402
-from _empty_scope import scope_is_empty  # noqa: E402
+from _empty_scope import scope_is_empty
+from _tui import counted, err, info, noun, ok
 
 REPO = Path(__file__).resolve().parent.parent
 TESTS = REPO / "tests"
@@ -143,12 +143,12 @@ def main() -> int:
         return 1
     for path, lines in found.items():
         err(
-            f"[ui-budgets] {path}: a literal UI budget at line(s) {', '.join(map(str, lines))} -- "
+            f"[ui-budgets] {path}: a literal UI budget at {noun(len(lines), 'line')} {', '.join(map(str, lines))} -- "
             f"drop the `timeout=` (the page default and wait_js's are the house budget)"
         )
     if found:
         return 1
-    info(f"[ui-budgets] {scanned} browser suite(s) scanned")
+    info(f"[ui-budgets] {counted(scanned, 'browser suite')} scanned")
     ok("[ui-budgets] every browser wait carries the house budget")
     return 0
 

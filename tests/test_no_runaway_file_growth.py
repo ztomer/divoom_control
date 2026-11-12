@@ -26,6 +26,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from divoom_lib.utils.plural import counted
+
 REPO = Path(__file__).resolve().parent.parent
 CEILING = 15_000
 TEXT_SUFFIXES = {".md", ".py", ".rs", ".js", ".html", ".css", ".sh", ".toml", ".json", ".yml", ".yaml", ".txt"}
@@ -62,7 +64,7 @@ def line_count(p: Path) -> int:
 def test_no_tracked_text_file_is_absurdly_large():
     oversized = [(p.relative_to(REPO), n) for p in tracked_text_files() if (n := line_count(p)) > CEILING]
     assert not oversized, (
-        "tracked text file(s) past the corruption ceiling of "
+        f"{counted(len(oversized), 'tracked text file')} past the corruption ceiling of "
         f"{CEILING:,} lines:\n"
         + "\n".join(f"  {rel}: {n:,} lines" for rel, n in oversized)
         + "\nA file this size is almost never intentional. The R73 case was "

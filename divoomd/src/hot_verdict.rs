@@ -337,7 +337,8 @@ pub fn migrate() {
         Ok(0) => {}
         Ok(n) => {
             println!(
-                "divoomd: carried {n} panel(s)' hot-channel record into hotchannel_state.json"
+                "divoomd: carried the hot-channel record of {} into hotchannel_state.json",
+                crate::plural::counted(n, "panel")
             );
         }
         Err(e) => eprintln!("divoomd: could not carry the old hot-channel records over: {e}"),
