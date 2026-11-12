@@ -2,7 +2,9 @@
 `goh ship` relaunch) paints its first frame instead of staying blank.
 
 Unit layer (always runs): divoom_gui.first_paint turns WebKit's occlusion detection off
-before the first show and back on after the page has drawn, and gui_main wires it.
+before the first show and never back on (0.45.3 restored it after two frames, and a covered
+window went blank ~20 minutes later); occlusion changes reach the page, whose render loop
+stops while covered; gui_main wires it.
 
 Window layer (DIVOOM_WINDOW_TESTS=1, a logged-in macOS session with Screen Recording):
 the finding itself. A real pywebview window opens under an opaque cover; the capture of
@@ -44,6 +46,7 @@ class _FakeWebView:
     def __init__(self, has_selector=True):
         self.has_selector = has_selector
         self.calls = []
+        self.native_js = []
 
     def respondsToSelector_(self, sel):
         return self.has_selector and sel == first_paint.OCCLUSION_SELECTOR
@@ -51,75 +54,82 @@ class _FakeWebView:
     def _setWindowOcclusionDetectionEnabled_(self, enabled):
         self.calls.append(enabled)
 
+    def evaluateJavaScript_completionHandler_(self, script, handler):
+        self.native_js.append(script)
+
 
 class _FakeWindow:
-    def __init__(self, frames_after_polls=2):
+    def __init__(self):
         self.events = types.SimpleNamespace(before_show=_Event(), loaded=_Event())
         self.js = []
-        self._polls_left = frames_after_polls
 
     def evaluate_js(self, script):
         self.js.append(script)
-        if script == first_paint.FIRST_FRAMES_DONE_JS:
-            if self._polls_left <= 0:
-                return True
-            self._polls_left -= 1
-            return False
         return True
 
 
 def _wire(window, webview_obj):
-    main_queue = []
-    first_paint.paint_first_frame_while_occluded(
+    """Returns the occlusion callbacks subscribed (call one with True/False to simulate a change)."""
+    observers = []
+    first_paint.keep_painting_while_occluded(
         window,
         native_webview=lambda w: webview_obj,
-        call_on_main=main_queue.append,
-        sleep=lambda s: None,
+        observe_occlusion=lambda wv, cb: observers.append(cb) or "token",
     )
-    return main_queue
+    return observers
 
 
-def test_detection_is_off_before_first_show_and_back_on_after_frames():
-    window, wv = _FakeWindow(frames_after_polls=2), _FakeWebView()
-    main_queue = _wire(window, wv)
+def test_detection_is_off_before_first_show_and_never_turned_back_on():
+    """The 0.45.3 restore after two frames is the defect: a covered window is a hidden page,
+    and WebKit drops a hidden page's layers (blank ~20 min into being covered)."""
+    window, wv = _FakeWindow(), _FakeWebView()
+    _wire(window, wv)
 
     window.events.before_show.fire()
     assert wv.calls == [False], "occlusion detection must be off before the window is first shown"
-
     window.events.loaded.fire()
-    assert window.js[0] == first_paint.ARM_FIRST_FRAMES_JS
-    assert window.js.count(first_paint.FIRST_FRAMES_DONE_JS) == 3, "polls until the page reports its frames"
-    assert wv.calls == [False], "the restore runs on the main thread, not the loaded worker"
-    for fn in main_queue:
-        fn()
-    assert wv.calls == [False, True]
+    assert wv.calls == [False], "detection must stay off: turning it back on blanks a covered window"
 
 
-def test_frame_wait_is_bounded():
-    window, wv = _FakeWindow(frames_after_polls=10**9), _FakeWebView()
-    main_queue = _wire(window, wv)
-    window.events.before_show.fire()
-    window.events.loaded.fire()
-    polls = window.js.count(first_paint.FIRST_FRAMES_DONE_JS)
-    assert polls == first_paint.MAX_POLLS == 100
-    for fn in main_queue:
-        fn()
-    assert wv.calls == [False, True], "a page that never draws still gets occlusion detection back"
-
-
-def test_frame_wait_failure_still_restores():
+def test_a_cover_and_an_uncover_reach_the_page():
     window, wv = _FakeWindow(), _FakeWebView()
+    observers = _wire(window, wv)
+    window.events.before_show.fire()
+    assert len(observers) == 1, "the window's occlusion changes must be observed"
+    observers[0](True)
+    observers[0](False)
+    assert wv.native_js == [first_paint.covered_js(True), first_paint.covered_js(False)]
+    assert "window.__divoomCovered = true" in first_paint.covered_js(True)
+    assert first_paint.COVERED_EVENT in first_paint.covered_js(False)
 
-    def boom(script):
-        raise RuntimeError("window gone")
 
-    window.evaluate_js = boom
-    main_queue = _wire(window, wv)
-    with pytest.raises(RuntimeError):
-        window.events.loaded.fire()
-    for fn in main_queue:
-        fn()
-    assert wv.calls == [True]
+def test_a_loaded_page_is_told_the_state_seen_before_it_ran():
+    window, wv = _FakeWindow(), _FakeWebView()
+    observers = _wire(window, wv)
+    window.events.before_show.fire()
+    observers[0](True)  # covered at first show, before the page's script existed
+    window.events.loaded.fire()
+    assert window.js == [first_paint.covered_js(True)]
+
+
+def test_without_the_switch_nothing_is_observed():
+    window, wv = _FakeWindow(), _FakeWebView(has_selector=False)
+    observers = _wire(window, wv)
+    window.events.before_show.fire()
+    assert observers == [] and wv.calls == []
+
+
+def test_the_render_loop_stops_while_covered_and_resumes():
+    """The page side reads the names first_paint.py writes (one place each), and the bench's
+    render loop asks it first on every frame."""
+    web = _REPO / "divoom_gui" / "web_ui"
+    covered = (web / "window_covered.js").read_text()
+    assert "window.__divoomCovered" in covered and f'"{first_paint.COVERED_EVENT}"' in covered
+    loop = (web / "spatial_stage.js").read_text()
+    loop = loop[loop.index("function renderLoop()") :][:200]
+    assert "if (window.DivoomCovered?.hold(renderLoop)) return;" in loop
+    html = (web / "index.html").read_text()
+    assert html.index('src="window_covered.js"') < html.index('src="spatial_stage.js"')
 
 
 def test_webkit_without_the_selector_degrades_with_a_reason(caplog):
@@ -139,7 +149,7 @@ def test_gui_main_wires_first_paint_on_the_control_center_window(monkeypatch, tm
     monkeypatch.setattr("divoom_lib.lifecycle_config.get_keep_daemon_alive", lambda: True)
     monkeypatch.setattr("divoom_lib.lifecycle_config.get_quit_menubar_on_exit", lambda: True)
     wired = []
-    monkeypatch.setattr(first_paint, "paint_first_frame_while_occluded", lambda w, **kw: wired.append(w))
+    monkeypatch.setattr(first_paint, "keep_painting_while_occluded", lambda w, **kw: wired.append(w))
 
     with pytest.raises(SystemExit):
         gui_main.main()
@@ -153,12 +163,12 @@ _PROBE = textwrap.dedent(
     """
     import sys, webview
     sys.path.insert(0, {repo!r})
-    from divoom_gui.first_paint import paint_first_frame_while_occluded
+    from divoom_gui.first_paint import keep_painting_while_occluded
     html = ("<html><body style='background:#c03;margin:0'>"
             "<h1 style='color:#fff;font-size:120px'>PAINTED</h1></body></html>")
     w = webview.create_window({title!r}, html=html, width=800, height=600, background_color="#0a0b10")
     if sys.argv[1] == "fix":
-        paint_first_frame_while_occluded(w)
+        keep_painting_while_occluded(w)
     webview.start()
     """
 )

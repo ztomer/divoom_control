@@ -239,11 +239,11 @@ def main():
     )
     api.window = window
     # DV.BGLAUNCH: `open -g` (every `goh ship` relaunch) opens the window behind the
-    # owner's, and WKWebView paints nothing in a window covered from its first show.
+    # owner's, and WKWebView paints nothing in (and in time drops) a covered window's page.
     if sys.platform == "darwin":
-        from divoom_gui.first_paint import paint_first_frame_while_occluded
+        from divoom_gui.first_paint import keep_painting_while_occluded
 
-        paint_first_frame_while_occluded(window)
+        keep_painting_while_occluded(window)
     # R24: spawn the daemon EAGERLY, BEFORE webview.start(), so it's ready when
     # the GUI first asks. The daemon's Bluetooth grant no longer depends on WHO
     # spawns it: `spawn_daemon` uses macOS TCC responsibility-disclaim so the

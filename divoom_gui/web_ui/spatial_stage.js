@@ -479,6 +479,7 @@
 
     function startAnimationLoop() {
         function renderLoop() {
+            if (window.DivoomCovered?.hold(renderLoop)) return;  // DV.BGLAUNCH: stopped while covered
             // Ask for the next frame first: a draw that throws must not end the loop.
             requestAnimationFrame(renderLoop);
             tick++;
