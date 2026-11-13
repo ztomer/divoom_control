@@ -6,6 +6,9 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Every tag has its `## vX` heading, and no heading claims a tag it lacks (EST.STORE1116).** goh refuses a seed entry a hosted runner cannot read from 2026-11-16, and this repo's CI runs goh. The v0.20.1 and v0.20.2 stanzas had been headed `Post-v0.20.0` and `Post-v0.20.1` (their tags' commits are 766627b and 26272eb/d71a254); they now carry their own version. Sixteen headings named versions whose bump was committed and never tagged (v0.16.1, v0.21.8 to v0.21.19, v0.22.12, v0.22.14, v0.27.0; the tag list and `gh release list` hold none of them) and now read `Untagged vX`. `changelog_tags_seed.json` is empty: the check is red on any new disagreement.
+- **`Cargo.lock` is at the newest compatible releases (EST.STORE1116).** `cargo update` moved the 70 crates `goh crates-behind` listed; the retired `crates_behind_seed.json` is deleted.
+
 ## v0.45.6 — Divoom.app starts through goh launch-app (login environment), not a bare open
 
 - **Clean under rustc and clippy 1.100 (DV.GATE100).** Every `map(f).unwrap_or_default()` on an `Option` or `Result` is now `map_or_default(f)` (lib, tests and integration tests), and a redundant clone of a link event in `wall_outcome_tests.rs` is gone; no suppression added.
@@ -6991,7 +6994,7 @@ of an errno four calls later.
   `divoomd --version` binds `/tmp/divoomd.sock` instead of printing a version.
   Noted, not fixed.
 
-## v0.27.0 — R67: seven classes, and three things that never worked (2026-08-30)
+## Untagged v0.27.0 — R67: seven classes, and three things that never worked (2026-08-30)
 
 Six user-reported symptoms, traced to **seven named classes** rather than seven
 patches. Three features turned out to be not merely buggy but **entirely
@@ -7849,7 +7852,7 @@ Implements 2 of the 3 candidate features surfaced by the Cloud API catalog
 Full suite: 2756 passed, 0 failed, 97 skipped. `cargo test` clean in
 `divoomd`. `check_no_emoji.py`/`check_file_size.py` gates clean.
 
-## v0.22.14 — R12 visual pass (Gemini-verified), Cloud API catalog, file split
+## Untagged v0.22.14 — R12 visual pass (Gemini-verified), Cloud API catalog, file split
 
 - **style: R12 visual pass, verified via a real Gemini design critique.**
   Sent real screenshots (dashboard, appbar, tab strip) to Gemini Pro
@@ -7917,7 +7920,7 @@ the real server. This round found and shipped the actual working one.
 Full suite: 2740 passed, 0 failed, 97 skipped. `cargo test` clean in
 `divoomd` (106 tests). `check_no_emoji.py`/`check_file_size.py` gates clean.
 
-## v0.22.12 — Python daemon server archived; hardware verification round
+## Untagged v0.22.12 — Python daemon server archived; hardware verification round
 
 - **BREAKING (internal): `divoom_daemon/` is now client-library-only.**
   The Python reference daemon *server* implementation was archived
@@ -8576,7 +8579,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   bundle's `Info.plist` CFBundleShortVersionString (packaged .app); the footer
   (`templates_settings.js`) is populated on load (`settings_hardware.js`).
 
-## v0.21.19 — fix: bound the BLE connect path (no more connect hangs) (2026-07-09)
+## Untagged v0.21.19 — fix: bound the BLE connect path (no more connect hangs) (2026-07-09)
 
 - **fix(rust-daemon):** the BLE connect path had unbounded awaits —
   `peripheral.connect()`, `discover_services()`, and `subscribe()` (`ble.rs`).
@@ -8589,7 +8592,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   (Timoo↔Pixoo) 0.3–0.7s, channel switching (0x45) with read-back confirming the
   mode changed, brightness writes — all solid across disconnect/reconnect cycles.
 
-## v0.21.18 — fix: BLE central self-heals a dead CoreBluetooth session (2026-07-09)
+## Untagged v0.21.18 — fix: BLE central self-heals a dead CoreBluetooth session (2026-07-09)
 
 - **fix(rust-daemon):** flaky "can't connect to the screens" — once the daemon's
   cached BLE central (CoreBluetooth session) died, EVERY scan and connect failed
@@ -8603,7 +8606,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
 - Teeth: `scan_guard_tests::detects_dead_central_error`. Both feature sets compile;
   31 lib tests pass.
 
-## v0.21.17 — fix: false "background service isn't running" banner + device-lock wedge (2026-07-09)
+## Untagged v0.21.17 — fix: false "background service isn't running" banner + device-lock wedge (2026-07-09)
 
 - **fix(rust-daemon):** an unbounded BLE write could hang forever and **wedge the
   daemon's `device` mutex**. A write to a peripheral that vanished (device off /
@@ -8624,7 +8627,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   (toggling Bluetooth mid-op left `device_status`/`device_call` hanging 6s+ while
   `get_status`/`get_device_activity` stayed instant).
 
-## v0.21.16 — harden: native daemon BLE scan against CoreBluetooth throttle (2026-07-09)
+## Untagged v0.21.16 — harden: native daemon BLE scan against CoreBluetooth throttle (2026-07-09)
 
 - **harden(rust-daemon):** made the daemon resistant to wedging the Mac's
   CoreBluetooth stack — the failure mode where rapid scan cycles make discovery
@@ -8646,7 +8649,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   (cache hit returns before `central()`, guard released). Both feature sets
   compile (`--no-default-features` CI gate green).
 
-## v0.21.15 — change: default BLE scan timeout 60s → 20s (2026-07-09)
+## Untagged v0.21.15 — change: default BLE scan timeout 60s → 20s (2026-07-09)
 
 - **change(scan):** the default device-scan timeout is now **20s** (was 60s in the
   GUI, 15s in the daemon). Divoom devices advertise within a few seconds, so a
@@ -8657,7 +8660,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   JS fallbacks. The 90s cap from v0.21.14 remains a backstop for a hand-set large
   value. Teeth: updated `test_r42_fixes` default assertions (60 → 20).
 
-## v0.21.14 — fix: native daemon BLE scan concurrency guard (2026-07-09)
+## Untagged v0.21.14 — fix: native daemon BLE scan concurrency guard (2026-07-09)
 
 - **fix(rust-daemon):** the native `divoomd` had no guard against concurrent BLE
   scans. `cmd_scan` drove the one shared adapter's `start_scan`/`stop_scan` with
@@ -8676,7 +8679,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
 - Teeth: `daemon_connect::scan_guard_tests` (reject-concurrent + reset-on-drop).
   `ble::scan` needs a device — verified over the socket on the built app.
 
-## v0.21.13 — refactor: hot-channel "Last checked" is now daemon-owned (2026-07-08)
+## Untagged v0.21.13 — refactor: hot-channel "Last checked" is now daemon-owned (2026-07-08)
 
 - **refactor(hot):** moved the per-device last-checked stamp (v0.21.12) from the
   GUI/Python layer into the **daemon**, which is the correct owner — it runs the
@@ -8695,7 +8698,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   store tests retained. `cargo check` clean; full Python suite green; JS render +
   no-op safety re-verified in the preview.
 
-## v0.21.12 — feat: hot channel shows a per-device "Last checked" stamp (2026-07-08)
+## Untagged v0.21.12 — feat: hot channel shows a per-device "Last checked" stamp (2026-07-08)
 
 - **feat(hot):** the hot-channel card now shows **"Last checked <when>"** per
   device under the Update button, so the verdict is dated instead of blind (the
@@ -8711,7 +8714,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   int/list `served`, corrupt file, blank address) + 3 API-delegation tests in
   `test_gui_api.py`. Stamp render + stale-amber styling verified in the preview.
 
-## v0.21.11 — fix: hot channel false "up to date" + redundant per-device downloads (2026-07-08)
+## Untagged v0.21.11 — fix: hot channel false "up to date" + redundant per-device downloads (2026-07-08)
 
 - **fix(hot):** two device HOT-channel update bugs.
   - **False "up to date".** The UI declared "up to date" purely from
@@ -8734,7 +8737,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   guard updated for the new `_load_hot_files` seam. UI verdict logic verified for
   all branches (updated / partial / up-to-date / old-daemon).
 
-## v0.21.10 — fix: macOS app had no icon (2026-07-08)
+## Untagged v0.21.10 — fix: macOS app had no icon (2026-07-08)
 
 - **fix(build):** the shipped `Divoom.app` used the generic blank Dock/Finder
   icon. The shipping PyInstaller spec had `icon=None` (`divoom.spec`) and there
@@ -8747,7 +8750,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   `setup_app.py` gains `iconfile` for parity on the legacy py2app path. (The
   menubar tray icon draws itself programmatically and was never affected.)
 
-## v0.21.9 — fix: daemon-down was silent and unrecoverable on restart (2026-07-08)
+## Untagged v0.21.9 — fix: daemon-down was silent and unrecoverable on restart (2026-07-08)
 
 - **fix(gui):** restarting the app left it **unusable with no indication and no
   way to recover**. The daemon (sole device owner) is deliberately killed on quit
@@ -8772,7 +8775,7 @@ stale state between ticks) and wastes cycles. The daemon already *could* push st
   `test_reconnect_daemon_failure_reports_down`, `test_reconnect_daemon_swallows_spawn_error`.
   Banner render + hidden-default verified in the static web_ui preview.
 
-## v0.21.8 — fix: MCP Server card showed a stale Python traceback (2026-07-08)
+## Untagged v0.21.8 — fix: MCP Server card showed a stale Python traceback (2026-07-08)
 
 - **fix(mcp):** the Settings → Connectivity → "MCP Server" card displayed a
   Python traceback (`run_stdio` → `connect_write_pipe` →
@@ -9346,7 +9349,7 @@ This release bundles the fixes from v0.16.1 along with major milestones in the n
   - **Command Queue Parity:** Brought command queue implementation to behavioral parity using Tokio (`eddec22`).
   - **Notify/Response Correlation:** Completed correlation matching for async notifications and command responses in Rust (`6d27a0e`).
 
-## Post-v0.20.0 — cask release / test fix / scan-timeout backstop / Tivoo-Max SPP fix (2026-06-22)
+## v0.20.1 — cask release / test fix / scan-timeout backstop / Tivoo-Max SPP fix (2026-06-22)
 
 - **Homebrew cask released**: Created GitHub release `v0.20.0` on `ztomer/divoom_lib` and
   uploaded `Divoom-v0.20.0.dmg` so the Homebrew cask URL resolves. Reinstall verified working.
@@ -9373,7 +9376,7 @@ This release bundles the fixes from v0.16.1 along with major milestones in the n
      `self.use_ios_le_protocol is False`.
 - Suite: 1701 passed, 87 skipped.
 
-## Post-v0.20.1 — Kaset album art integration + card padding (2026-06-22)
+## v0.20.2 — Kaset album art integration + card padding (2026-06-22)
 
 - **Kaset album art support**: Added Kaset (`/Applications/Kaset.app`) as a now-playing
   source. Kaset's AppleScript `get player info` returns a JSON blob with direct YouTube
@@ -9392,7 +9395,7 @@ This release bundles the fixes from v0.16.1 along with major milestones in the n
 - Tests: 12 passed (media_source).
 
 ---
-## v0.16.1 — packaged app startup fix (2026-06-22)
+## Untagged v0.16.1 — packaged app startup fix (2026-06-22)
 
 Fixes a critical startup crash when running the packaged macOS app bundle `Divoom.app` installed via the Homebrew cask:
 
