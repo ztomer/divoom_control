@@ -162,5 +162,5 @@ info "player is queried. Both are attributed to the installed bundle."
 
 if [[ "$LAUNCH" == "1" ]]; then
   info "launching..."
-  open "$DEST"
+  "${GOH_DIR:-$HOME/Projects/gates_of_heck}/bin/goh" launch-app "$DEST"
 fi

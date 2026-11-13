@@ -118,7 +118,7 @@ if [[ -S "$SOCK" ]] && python3 "$REPO/scripts/daemon_ping.py" --socket "$SOCK" >
 fi
 
 info "launching to verify..."
-open "$APP"
+"${GOH_DIR:-$HOME/Projects/gates_of_heck}/bin/goh" launch-app "$APP"
 if python3 "$REPO/scripts/daemon_ping.py" --socket "$SOCK" --wait 15; then
   ok "verified: the bundle launched and answered ping"
   info "trace log: $TRACE_LOG"

@@ -89,7 +89,7 @@ if [ "$LAUNCH" -eq 0 ]; then
 fi
 
 section "launching and proving"
-open "$DEST"
+"$GOH/bin/goh" launch-app "$DEST"
 PID=""
 for _ in $(seq 1 15); do
     sleep 1
