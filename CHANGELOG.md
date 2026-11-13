@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+## v0.45.7 — the tracked estate seeds are empty, every tag has its changelog heading, Cargo.lock is current
+
 - **Every tag has its `## vX` heading, and no heading claims a tag it lacks (EST.STORE1116).** goh refuses a seed entry a hosted runner cannot read from 2026-11-16, and this repo's CI runs goh. The v0.20.1 and v0.20.2 stanzas had been headed `Post-v0.20.0` and `Post-v0.20.1` (their tags' commits are 766627b and 26272eb/d71a254); they now carry their own version. Sixteen headings named versions whose bump was committed and never tagged (v0.16.1, v0.21.8 to v0.21.19, v0.22.12, v0.22.14, v0.27.0; the tag list and `gh release list` hold none of them) and now read `Untagged vX`. `changelog_tags_seed.json` is empty: the check is red on any new disagreement.
 - **`Cargo.lock` is at the newest compatible releases (EST.STORE1116).** `cargo update` moved the 70 crates `goh crates-behind` listed; the retired `crates_behind_seed.json` is deleted.
 
