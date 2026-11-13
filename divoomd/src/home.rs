@@ -38,8 +38,9 @@ fn under_test_harness() -> bool {
     *IS.get_or_init(|| std::env::current_exe().is_ok_and(|exe| is_cargo_test_binary(&exe)))
 }
 
-/// Cargo's test-binary layouts: `<anything>/deps/<name>-<16 lowercase hex>`
-/// (the classic target dir), or `<anything>/<hash>/out/<name>-<hash>` (the
+/// Whether `exe` sits where cargo writes a test binary.
+///
+/// `<anything>/deps/<name>-<16 lowercase hex>` (the classic target dir), or `<anything>/<hash>/out/<name>-<hash>` (the
 /// `build.build-dir` layout, where the directory carries the binary's hash).
 #[must_use]
 pub fn is_cargo_test_binary(exe: &Path) -> bool {
