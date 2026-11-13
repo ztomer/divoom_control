@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+## v0.45.6 — Divoom.app starts through goh launch-app (login environment), not a bare open
+
 - **Every app launch gives the app launchd's login environment (EST.BAREOPEN).** `install.sh`, `scripts/install_local.sh` and `scripts/make_dev_daemon_app.sh` start Divoom.app with `goh launch-app` instead of a bare `open`, which handed the app the caller's environment (a ship's `GOH_DIR` and `GOH_SHIP_ITEM` among it) and let it outlive the script with them. `goh bare-open` finds no site here, and the entries for this repository are out of the owner's seed store.
 
 ## v0.45.5 — CI fetches history and tags for changelog-tags on goh v0.101.1; every count meets its noun, plural-hedge seed deleted
