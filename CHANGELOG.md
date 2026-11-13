@@ -6,12 +6,10 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
-- **Clean under rustc and clippy 1.100 (DV.GATE100).** Every `map(f).unwrap_or_default()` on an `Option` or `Result` is now `map_or_default(f)` (lib, tests and integration tests), and a redundant clone of a link event in `wall_outcome_tests.rs` is gone; no suppression added.
-
-- **The test-HOME guard recognises cargo's build-dir layout (DV.GATE100).** With a shared `build.build-dir`, the lib's unit-test binary sits at `build/divoomd/<hash>/out/divoomd-<hash>`, not under `deps/`, so `home::is_cargo_test_binary` missed it, the guard never moved HOME, and the sweep wrote into the planted owner home (`this_process_is_a_test_harness` and `a_sweep_of_every_command_leaves_the_owners_home_alone` red). The detector now also accepts an `out/` directory whose parent carries the binary's own hash; a mismatched hash or another directory is still refused.
-
 ## v0.45.6 — Divoom.app starts through goh launch-app (login environment), not a bare open
 
+- **Clean under rustc and clippy 1.100 (DV.GATE100).** Every `map(f).unwrap_or_default()` on an `Option` or `Result` is now `map_or_default(f)` (lib, tests and integration tests), and a redundant clone of a link event in `wall_outcome_tests.rs` is gone; no suppression added.
+- **The test-HOME guard recognises cargo's build-dir layout (DV.GATE100).** With a shared `build.build-dir`, the lib's unit-test binary sits at `build/divoomd/<hash>/out/divoomd-<hash>`, not under `deps/`, so `home::is_cargo_test_binary` missed it, the guard never moved HOME, and the sweep wrote into the planted owner home (`this_process_is_a_test_harness` and `a_sweep_of_every_command_leaves_the_owners_home_alone` red). The detector now also accepts an `out/` directory whose parent carries the binary's own hash; a mismatched hash or another directory is still refused.
 - **Every app launch gives the app launchd's login environment (EST.BAREOPEN).** `install.sh`, `scripts/install_local.sh` and `scripts/make_dev_daemon_app.sh` start Divoom.app with `goh launch-app` instead of a bare `open`, which handed the app the caller's environment (a ship's `GOH_DIR` and `GOH_SHIP_ITEM` among it) and let it outlive the script with them. `goh bare-open` finds no site here, and the entries for this repository are out of the owner's seed store.
 
 ## v0.45.5 — CI fetches history and tags for changelog-tags on goh v0.101.1; every count meets its noun, plural-hedge seed deleted
