@@ -8,12 +8,13 @@
 //! state file would have to remember, so the one root is replaced instead.
 //!
 //! Inside a cargo test harness -- a unit- or integration-test binary, which
-//! cargo always writes as `<profile>/deps/<crate>-<16 hex>` -- a HOME that is
+//! cargo writes as `<profile>/deps/<crate>-<16 hex>` or, under a build dir,
+//! `<hash>/out/<crate>-<hash>` -- a HOME that is
 //! not under the temp directory is the developer's, and is replaced by a
 //! throwaway home for the process (HOME itself is moved there, so every
 //! child the test spawns inherits it). A HOME a test points at a temp
-//! directory of its own is honoured. A shipped or dev binary never sits in a
-//! `deps` directory under that name, so this never fires outside a test.
+//! directory of its own is honoured. A shipped or dev binary never sits in
+//! either place under that name, so this never fires outside a test.
 //! `home_isolation_tests.rs` holds this.
 
 use std::path::{Path, PathBuf};
@@ -37,25 +38,35 @@ fn under_test_harness() -> bool {
     *IS.get_or_init(|| std::env::current_exe().is_ok_and(|exe| is_cargo_test_binary(&exe)))
 }
 
-/// `<anything>/deps/<name>-<16 lowercase hex>`, cargo's test-binary layout.
+/// Cargo's test-binary layouts: `<anything>/deps/<name>-<16 lowercase hex>`
+/// (the classic target dir), or `<anything>/<hash>/out/<name>-<hash>` (the
+/// `build.build-dir` layout, where the directory carries the binary's hash).
 #[must_use]
 pub fn is_cargo_test_binary(exe: &Path) -> bool {
-    let in_deps = exe
-        .parent()
-        .and_then(Path::file_name)
-        .is_some_and(|d| d == "deps");
-    let hashed = exe
+    let Some(hash) = exe
         .file_name()
         .and_then(|n| n.to_str())
         .and_then(|n| n.rsplit_once('-'))
-        .is_some_and(|(stem, hash)| {
+        .filter(|(stem, hash)| {
             !stem.is_empty()
                 && hash.len() == 16
                 && hash
                     .bytes()
                     .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-        });
-    in_deps && hashed
+        })
+        .map(|(_, hash)| hash)
+    else {
+        return false;
+    };
+    let parent = exe.parent();
+    let dir = parent.and_then(Path::file_name);
+    let in_deps = dir.is_some_and(|d| d == "deps");
+    let in_out = dir.is_some_and(|d| d == "out")
+        && parent
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+            .is_some_and(|d| d == hash);
+    in_deps || in_out
 }
 
 fn throwaway_home() -> &'static PathBuf {
@@ -80,6 +91,11 @@ mod tests {
         assert!(is_cargo_test_binary(Path::new(
             "/x/debug/deps/mcp_stdio-fedcba9876543210"
         )));
+        // Cargo's build-dir layout (shared `build.build-dir`): the binary sits
+        // in `build/<pkg>/<hash>/out/` and carries the same hash.
+        assert!(is_cargo_test_binary(Path::new(
+            "/c/debug/build/divoomd/f013f275ce832e84/out/divoomd-f013f275ce832e84"
+        )));
         for no in [
             "/x/debug/divoomd",
             "/Applications/Divoom Control.app/Contents/MacOS/divoomd",
@@ -87,6 +103,9 @@ mod tests {
             "/x/debug/deps/divoomd-0123456789ABCDEF",
             "/x/debug/deps/divoomd-0123",
             "/x/debug/bin/divoomd-0123456789abcdef",
+            "/c/debug/build/divoomd/0000000000000000/out/divoomd-f013f275ce832e84",
+            "/c/debug/build/divoomd/f013f275ce832e84/bin/divoomd-f013f275ce832e84",
+            "/x/out/divoomd-f013f275ce832e84",
         ] {
             assert!(!is_cargo_test_binary(Path::new(no)), "{no}");
         }
