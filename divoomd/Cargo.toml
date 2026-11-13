@@ -71,8 +71,6 @@ uuid = { version = "1", optional = true }
 # reqwest bump, repeat that three-way probe -- the positive half alone proves
 # nothing.
 reqwest = { version = "0.13", features = ["json", "rustls", "query", "charset"] }
-rusqlite = { version = "0.41", features = ["bundled"] }
-plist = "1"
 sysinfo = "0.39"
 md-5 = "0.11"
 sha1 = "0.11"
@@ -87,6 +85,11 @@ minilzo-rs = "0.6"
 # entitled perl host). Replaces the AppleScript + iTunes-Search guessing.
 [target.'cfg(target_os = "macos")'.dependencies]
 nowplaying = { path = "../nowplaying" }
+# Notification Center's SQLite database and its binary-plist records: read only by
+# `notification_db` and `macos_notifications`, both macOS-only modules, so Linux neither compiles
+# rusqlite's bundled SQLite nor warns `cargo::unused_dependencies` (DV.LINTTIDY).
+rusqlite = { version = "0.41", features = ["bundled"] }
+plist = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }

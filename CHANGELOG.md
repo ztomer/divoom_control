@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The Linux all-features lint is warning-free, builderless, and tidies its images (DV.LINTTIDY).** (1) `plist` and `rusqlite`, read only by the macOS-only `notification_db` and `macos_notifications`, moved to `divoomd`'s macOS target dependencies: Linux no longer builds rusqlite's bundled SQLite nor prints `warning: unused dependency` (cargo's `unused_dependencies` lint). `-D warnings` after `--` never reached cargo's own manifest lints, so the gate called a run with that warning OK; it now reads its log and any `warning` line is red. (2) The lint image is made by running `rustup component add clippy` in a container of the named base and committing it, not by `docker build`, which without buildx used the deprecated legacy builder (house rule 17); no buildx install, none needed on a runner. (3) The gate removes every other `divoom-linux-lint` tag and the `rust:<tag>` base each was made from, unforced, so raising `BASE_TAG` stops leaving 2 GB on the colima disk (1.99.1-trixie and `latest` removed). Pinned by `tests/test_linux_all_features_runtime.py` with a stub docker.
+
 ## v0.45.8 — release kits read hosted CI once and never wait on it
 
 - **No release step waits on hosted CI (EST.CIWAIT).** Hosted CI is advisory (owner 2026-11-11). `scripts/ship_release.sh` no longer runs `loopctl ci --wait` after its push; `scripts/release.sh` reads CI once: green tags, red or unread refuses, and pending, no run or throttled tags as advisory when the checkout's pre-push hook is goh's push gate (refused without one), the rule goh v0.110.0 uses (GOH.CIWAIT). Pinned by `tests/test_ship_release.py`.

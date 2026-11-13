@@ -105,12 +105,37 @@ if ! goh_container_runtime_up "divoom linux-all-features"; then
 fi
 
 
-# Build the lint image when it is missing. `--progress=plain` keeps the
-# component download out of the way of the gate's own output.
+# Build the lint image when it is missing, WITHOUT a docker builder (DV.LINTTIDY).
+# `docker build` with no buildx plugin runs the deprecated legacy builder ("DEPRECATED: The legacy
+# builder is deprecated and will be removed in a future release"), and house rule 17 forbids building
+# on a deprecated API. buildx is a plugin this machine and a runner may not have; the image is the base
+# plus ONE rustup component, so it is made by running that command in a container of the base and
+# committing the result: the same image, no builder, nothing to install.
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    info "[linux-all-features] building $IMAGE (one time; stable Rust + clippy)"
-    printf 'FROM %s\nRUN rustup component add clippy\n' "$BASE_IMAGE" \
-        | docker build -t "$IMAGE" - >/dev/null
+    info "[linux-all-features] making $IMAGE (one time; stable Rust + clippy)"
+    BUILD_CTR="divoom-linux-lint-build-$$"
+    docker rm -f "$BUILD_CTR" >/dev/null 2>&1 || true
+    if ! docker run --name "$BUILD_CTR" "$BASE_IMAGE" rustup component add clippy >/dev/null \
+        || ! docker commit "$BUILD_CTR" "$IMAGE" >/dev/null; then
+        docker rm -f "$BUILD_CTR" >/dev/null 2>&1 || true
+        err "[linux-all-features] could not make $IMAGE from $BASE_IMAGE"
+        exit 1
+    fi
+    docker rm "$BUILD_CTR" >/dev/null 2>&1 || true
+fi
+
+# Drop what raising BASE_TAG replaced (DV.LINTTIDY): every other tag of THIS gate's own image
+# repository, then the `rust:<tag>` each was made from. 0.45.8 left divoom-linux-lint:1.99.1-trixie
+# (2.2 GB) and rust:1.99.1-trixie on the colima disk for good. Only when the image name is the
+# default (an overriding DIVOOM_LINUX_LINT_IMAGE is someone's own), never forced (an image a
+# container or another image still builds on survives), and the lint image goes before its base.
+if [ "$IMAGE" = "divoom-linux-lint:$BASE_TAG" ]; then
+    for old in $(docker images --format '{{.Tag}}' divoom-linux-lint 2>/dev/null || true); do
+        [ "$old" = "$BASE_TAG" ] && continue
+        info "[linux-all-features] removing the image BASE_TAG replaced: divoom-linux-lint:$old"
+        docker rmi "divoom-linux-lint:$old" >/dev/null 2>&1 || true
+        [ "$old" = "latest" ] || docker rmi "rust:$old" >/dev/null 2>&1 || true
+    done
 fi
 
 info "[linux-all-features] CI's Linux clippy, flag for flag: cargo clippy ${CI_CLIPPY_ARGS[*]}"
@@ -136,6 +161,15 @@ if [ "$rc" -ne 0 ]; then
     grep -E "^(error|warning)" "$LOG" | head -30 || true
     echo "  full log: $LOG"
     err "[linux-all-features] FAILED — CI's Linux --all-features lint is red here too"
+    exit 1
+fi
+# `-D warnings` after `--` reaches rustc and clippy, not cargo's own manifest lints (`warning:
+# unused dependency`), so a run could print a warning and be called OK (DV.LINTTIDY): any warning in
+# the log is red.
+if grep -qE "^warning" "$LOG"; then
+    grep -E "^warning" "$LOG" | head -10 || true
+    echo "  full log: $LOG"
+    err "[linux-all-features] FAILED — the lint printed a warning (cargo's own lints are not under -D warnings)"
     exit 1
 fi
 toolchain="$(awk '/^rustc /{print; exit}' "$LOG")"

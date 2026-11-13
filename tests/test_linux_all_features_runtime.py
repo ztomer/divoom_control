@@ -30,8 +30,9 @@ echo "docker $*" >> "$STUB_LOG"
 case "$1" in
   info) [ -f "$STUB_STATE/up" ] ;;
   ps) [ -f "$STUB_STATE/busy" ] && echo abc123; exit 0 ;;
-  image) exit 0 ;;
-  run) echo "rustc 1.99.0 (stub)"; exit 0 ;;
+  image) [ -f "$STUB_STATE/noimage" ] && exit 1; exit 0 ;;
+  images) cat "$STUB_STATE/images" 2>/dev/null; exit 0 ;;
+  run) echo "rustc 1.99.0 (stub)"; [ -f "$STUB_STATE/warn" ] && echo "warning: unused dependency plist"; exit 0 ;;
   *) exit 0 ;;
 esac
 """
@@ -44,7 +45,9 @@ esac
 """
 
 
-def _run(tmp_path: pathlib.Path, *, up: bool, busy: bool = False) -> tuple[int, list[str], str]:
+def _run(
+    tmp_path: pathlib.Path, *, up: bool, busy: bool = False, state_files: dict[str, str] | None = None
+) -> tuple[int, list[str], str]:
     bin_dir = tmp_path / "bin"
     state = tmp_path / "state"
     bin_dir.mkdir()
@@ -57,6 +60,8 @@ def _run(tmp_path: pathlib.Path, *, up: bool, busy: bool = False) -> tuple[int, 
         (state / "up").touch()
     if busy:
         (state / "busy").touch()
+    for name, body in (state_files or {}).items():
+        (state / name).write_text(body)
     log = tmp_path / "calls.log"
     log.touch()
     env = dict(os.environ)
@@ -156,3 +161,69 @@ def test_the_cargo_target_dir_is_a_named_volume_not_a_host_mount(tmp_path):
     assert "/" not in source, f"cargo's target dir is a host bind mount: {source}"
     assert "-e CARGO_TARGET_DIR=/cache/target" in run, run
     assert not (tmp_path / "cache").exists(), "the gate still creates a host-side target cache"
+
+
+def test_the_image_is_made_without_the_legacy_builder(tmp_path):
+    """DV.LINTTIDY: `docker build` without buildx runs the deprecated legacy builder (docker
+    prints "DEPRECATED: The legacy builder is deprecated and will be removed"), which house rule 17
+    forbids building on. The lint image is the base plus one rustup component, made by running that
+    one command in a container of the base and committing it: no builder at all, nothing to install
+    (buildx is a brew plugin this machine and a CI runner need not have), and the same image."""
+    rc, calls, out = _run(tmp_path, up=True, state_files={"noimage": ""})
+    assert rc == 0, out
+    assert not any(c.startswith(("docker build", "docker buildx", "docker image build")) for c in calls), calls
+    run = next(c for c in calls if c.startswith("docker run ") and "component add clippy" in c)
+    assert "rust:1.100.0-trixie" in run, run
+    commit = next(c for c in calls if c.startswith("docker commit "))
+    assert commit.endswith("divoom-linux-lint:1.100.0-trixie"), commit
+    # the build container is removed again, so a failed or finished build leaves nothing behind
+    assert any(c.startswith("docker rm ") for c in calls), calls
+
+
+def test_a_moved_base_tag_removes_the_images_it_replaced(tmp_path):
+    """DV.LINTTIDY: raising BASE_TAG left divoom-linux-lint:1.99.1-trixie and rust:1.99.1-trixie
+    (2.2 GB and the base under it) on the colima disk for good. The gate drops the lint images of its
+    own repository whose tag is not the current one, and the `rust:<tag>` each was made from. Never a
+    forced removal (an image a container or another image still uses survives), and never an image
+    this gate did not make."""
+    images = "1.100.0-trixie\n1.99.1-trixie\nlatest\n"
+    rc, calls, out = _run(tmp_path, up=True, state_files={"images": images})
+    assert rc == 0, out
+    removed = [c for c in calls if c.startswith("docker rmi ")]
+    assert "docker rmi divoom-linux-lint:1.99.1-trixie" in removed, calls
+    assert "docker rmi rust:1.99.1-trixie" in removed, calls
+    assert "docker rmi divoom-linux-lint:latest" in removed, calls
+    assert not any("1.100.0" in c for c in removed), removed
+    assert not any("-f" in c.split() or "--force" in c.split() for c in removed), removed
+    # the lint image goes first: the base under it cannot be removed while it stands
+    assert calls.index("docker rmi divoom-linux-lint:1.99.1-trixie") < calls.index("docker rmi rust:1.99.1-trixie")
+    assert not any(c.startswith("docker rmi") and "rust:latest" in c for c in calls), calls
+
+
+def test_no_stale_image_means_nothing_is_removed(tmp_path):
+    rc, calls, out = _run(tmp_path, up=True, state_files={"images": "1.100.0-trixie\n"})
+    assert rc == 0, out
+    assert not any(c.startswith("docker rmi") for c in calls), calls
+
+
+def test_a_cargo_warning_in_the_lint_log_is_red(tmp_path):
+    """DV.LINTTIDY: `-D warnings` after `--` reaches rustc and clippy, not cargo's own manifest
+    lints, so `warning: unused dependency plist` printed in a run the gate called OK. The gate reads
+    its own log: any `warning` line is red, naming it."""
+    rc, _, out = _run(tmp_path, up=True, state_files={"warn": ""})
+    assert rc == 1, out
+    assert "unused dependency" in out, out
+
+
+def test_cargo_manifest_keeps_macos_only_crates_out_of_the_linux_build():
+    """DV.LINTTIDY: `plist` and `rusqlite` are read only by `notification_db` and
+    `macos_notifications`, both `#[cfg(target_os = "macos")]`; as plain dependencies Linux compiled
+    (rusqlite bundles SQLite's C source) and linked crates nothing there calls."""
+    import tomllib
+
+    manifest = tomllib.loads((ROOT / "divoomd" / "Cargo.toml").read_text())
+    plain = set(manifest["dependencies"])
+    macos = set(manifest["target"]['cfg(target_os = "macos")']["dependencies"])
+    for crate in ("plist", "rusqlite"):
+        assert crate not in plain, f"{crate} is built on Linux, which never uses it"
+        assert crate in macos, f"{crate} is gone from the macOS dependencies"
