@@ -43,6 +43,7 @@ GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 [ -f "$GOH/tui/lib.sh" ] && source "$GOH/tui/lib.sh"
 type info >/dev/null 2>&1 || { info() { echo "→ $*"; }; ok() { echo "✓ $*"; }
                                warn() { echo "⚠ $*"; }; err() { echo "✗ $*" >&2; }; }
+type step >/dev/null 2>&1 || step() { echo "· $*"; }
 
 # CI's "cargo clippy (divoomd, all targets/features, deny warnings)" step
 # (.github/workflows/tests.yml, rust-core job), flag for flag.
@@ -56,11 +57,18 @@ CI_CLIPPY_ARGS=(-p divoomd --all-targets --all-features -- -D warnings)
 BASE_TAG="${DIVOOM_LINUX_LINT_BASE_TAG:-1.99.1-trixie}"
 BASE_IMAGE="${DIVOOM_LINUX_LINT_BASE_IMAGE:-rust:$BASE_TAG}"
 IMAGE="${DIVOOM_LINUX_LINT_IMAGE:-divoom-linux-lint:$BASE_TAG}"
-# Where the container's cargo target dir and registry live. The target dir is
-# OUTSIDE the checkout on purpose: the Linux artifacts must not land in the
+# Where the container's cargo target dir lives: a docker NAMED volume. It is
+# OUTSIDE the checkout on purpose (the Linux artifacts must not land in the
 # repo's own target/, where tools/check_built_binaries.py would read a Linux
-# binary as the macOS one.
-CACHE="${DIVOOM_LINUX_LINT_CACHE:-$HOME/.cache/divoom-linux-lint}"
+# binary as the macOS one), and it is NOT a host directory (DV.LINTEXEC): cargo
+# execs the build scripts it links there, and on a host bind mount through
+# colima's virtiofs the linker's exec bit did not always reach the file
+# (0.45.7's push: `Permission denied (os error 13)` on a build-script-build left
+# at mode 644 on both sides, while the same link re-run was 755). A named volume
+# lives on the VM's own Linux filesystem, so the verdict cannot hang on host
+# mount semantics. It persists across `colima stop`, so the cache stays warm.
+# tests/test_linux_all_features_runtime.py holds the target to a named volume.
+TARGET_VOLUME="${DIVOOM_LINUX_LINT_TARGET_VOLUME:-divoom-linux-lint-target}"
 
 if [ "${DIVOOM_SKIP_LINUX_ALL_FEATURES:-}" = "1" ]; then
     warn "[linux-all-features] SKIPPED by DIVOOM_SKIP_LINUX_ALL_FEATURES=1 — CI's Linux --all-features lint is unchecked here"
@@ -96,7 +104,6 @@ if ! goh_container_runtime_up "divoom linux-all-features"; then
     exit 1
 fi
 
-mkdir -p "$CACHE/target"
 
 # Build the lint image when it is missing. `--progress=plain` keeps the
 # component download out of the way of the gate's own output.
@@ -113,7 +120,7 @@ docker run --rm \
     -v "$ROOT":/w -w /w \
     -v "$HOME/.cargo/registry":/cache/cargo/registry \
     -v "$HOME/.cargo/git":/cache/cargo/git \
-    -v "$CACHE/target":/cache/target \
+    -v "$TARGET_VOLUME":/cache/target \
     -e CARGO_HOME=/cache/cargo \
     -e CARGO_TARGET_DIR=/cache/target \
     -e PATH="/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \

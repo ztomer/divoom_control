@@ -135,3 +135,24 @@ def test_no_docker_on_the_owners_machine_stays_red(tmp_path):
     rc, out = _run_without_docker(tmp_path, hosted=False)
     assert rc == 1, out
     assert "missing: docker" in out and "NOT APPLICABLE" not in out, out
+
+
+def test_the_cargo_target_dir_is_a_named_volume_not_a_host_mount(tmp_path):
+    """DV.LINTEXEC: 0.45.7's push went red at `Permission denied (os error 13)` executing
+    /cache/target/debug/build/divoomd-9c4e6881eafa11a7/build-script-build. The target dir was a
+    host directory bind-mounted through colima's virtiofs, and the linker's exec bit on that file
+    never reached the host (mode 644 on both sides; the same link re-run minutes later was 755):
+    the gate's verdict hung on macOS-side virtiofs setattr semantics, not on the code. Cargo's
+    target dir is a docker NAMED volume, which lives on the VM's own Linux filesystem, so no
+    build artifact the container execs ever crosses the host mount."""
+    rc, calls, out = _run(tmp_path, up=True)
+    assert rc == 0, out
+    run = next(c for c in calls if c.startswith("docker run "))
+    args = run.split()
+    mounts = [args[i + 1] for i, a in enumerate(args) if a == "-v"]
+    target = [m for m in mounts if m.split(":")[1] == "/cache/target"]
+    assert len(target) == 1, mounts
+    source = target[0].split(":")[0]
+    assert "/" not in source, f"cargo's target dir is a host bind mount: {source}"
+    assert "-e CARGO_TARGET_DIR=/cache/target" in run, run
+    assert not (tmp_path / "cache").exists(), "the gate still creates a host-side target cache"
