@@ -12,19 +12,14 @@
 #   2. push       HEAD to origin/main through the pre-push gate. release.sh refuses a tag whose commit
 #                 is not on origin/main (D.RELTAG), so the release commit must be there first; this is
 #                 why the kit pushes and goh's own push step is skipped (GOH_SHIP_RELEASE_PUSHES=1).
-#   3. CI         wait for this commit's CI through loopctl's door (DV.CIDOOR: `loopctl.py ci SHA
-#                 --repo divoom-control --wait`; exit 0 green, 1 red or unread, 3 pending, 4 no CI,
-#                 75 throttled). loopctl reads .gatesrc's LOOP_CI_ADVISORY: the macOS `gate` job
-#                 duplicates the local gate and is reported, never blocking (DV.CIADVISORY).
-#                 release.sh's own check refuses a still-running CI, and the commit this kit just
-#                 pushed is always still running.
-#   4. release    exec scripts/release.sh, which re-checks CI (now green), builds the DMG, tags,
+#   3. CI         not here: hosted CI is advisory (owner 2026-11-11; EST.CIWAIT, as goh GOH.CIWAIT).
+#                 release.sh reads it ONCE through loopctl's door; nothing in either script waits.
+#   4. release    exec scripts/release.sh, which reads CI once (red refuses; pending is advisory over the push gate), builds the DMG, tags,
 #                 pushes the tag, creates the release and bumps the cask.
 #
 #   scripts/ship_release.sh 0.45.2
 #
-# Seams (the tests): DIVOOM_LOOPCTL names loopctl.py (the CI door; default ~/Projects/.loop's); the
-# release step is scripts/release.sh beside this file. Nothing is asked of GitHub except through those.
+# Seams (the tests): the release step is scripts/release.sh beside this file. Nothing is asked of GitHub except through those.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -68,17 +63,5 @@ python3 "$GOH/tools/release-kit/changelog_cut.py" check --version "$V" --file CH
 
 info "pushing $(git rev-parse --short HEAD) to origin/main"
 git push origin HEAD:refs/heads/main || die "push refused (above) -- nothing tagged"
-
-info "waiting for CI on $(git rev-parse --short HEAD) (loopctl's door)"
-rc=0
-python3 "${DIVOOM_LOOPCTL:-$HOME/Projects/.loop/tools/loopctl.py}" ci "$(git rev-parse HEAD)" --repo divoom-control --wait || rc=$?
-case "$rc" in
-  0) ;;
-  75) die "GitHub is throttled (exit 75, above) -- not a failure, not a green; re-run the ship when it lifts" 75 ;;
-  3) die "CI is not green on $(git rev-parse --short HEAD): still pending after the wait (above) -- nothing tagged" ;;
-  4) die "CI is not green on $(git rev-parse --short HEAD): no CI found for it (above) -- nothing tagged" ;;
-  *) die "CI is not green on $(git rev-parse --short HEAD): red or unread (loopctl exit ${rc}, above) -- nothing tagged" ;;
-esac
-ok "CI green"
 
 exec bash scripts/release.sh

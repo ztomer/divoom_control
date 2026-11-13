@@ -45,23 +45,39 @@ for arg in "$@"; do
   esac
 done
 
-# ci_gate — refuse to cut a release while GitHub CI is not green for the commit being
-# tagged. One read through loopctl's door (DV.CIDOOR), which judges job by job with .gatesrc's
-# LOOP_CI_ADVISORY: a duplicate-of-local job is reported, never blocking; a job local cannot
-# reproduce blocks. A billing/credit-depleted CI is no verdict, so it is red here too; the
-# loud way past a CI that cannot run is --skip-ci-check.
+# ci_gate — read GitHub CI for the commit being tagged ONCE, never waiting (EST.CIWAIT, the same rule
+# as goh GOH.CIWAIT's lib/ship_verify.py ci_read and release-kit ci_step.sh). One read through
+# loopctl's door (DV.CIDOOR), which judges job by job with .gatesrc's LOOP_CI_ADVISORY. Hosted CI is
+# advisory (owner 2026-11-11; .loop LOOP.CIADVISORY): green tags; red or unread refuses; pending (3),
+# no verdict (4) or throttled (75) tags ADVISORY when this checkout's pre-push hook is goh's push gate
+# (the local record HEAD passed the full gate; loopctl tick re-reads the run) and refuses without one.
+# The loud way past a CI that cannot run is --skip-ci-check.
+ci_push_gated() {
+  local hook
+  hook="$(git rev-parse --git-path hooks/pre-push 2>/dev/null)" || return 0
+  [ -f "$hook" ] && grep -q 'push_gate\.sh' "$hook" 2>/dev/null && printf '%s' "$hook"
+  return 0
+}
 ci_gate() {
-  local sha="$1" verdict rc=0
-  echo "→ checking GitHub CI status for ${sha}"
+  local sha="$1" verdict rc=0 hook state
+  echo "→ checking GitHub CI status for ${sha} (one read, never a wait)"
   verdict="$(python3 "${DIVOOM_LOOPCTL:-$HOME/Projects/.loop/tools/loopctl.py}" ci "$sha" --repo divoom-control 2>&1)" || rc=$?
   case "$rc" in
-    0) echo "  ✓ ${verdict}" ;;
-    3) echo "  ERROR: ${verdict}. CI is still pending; wait for it to finish." >&2; exit 1 ;;
-    4) echo "  ERROR: ${verdict}. No CI found for this commit." >&2; exit 1 ;;
-    75) echo "  ERROR: ${verdict} -- not a failure, not a green; retry when it lifts." >&2; exit 75 ;;
-    *) echo "  ERROR: ${verdict}. Refusing to cut a release on a CI that is not green." >&2
+    0) echo "  ✓ ${verdict}"; return 0 ;;
+    3) state="still pending" ;;
+    4) state="has no run yet" ;;
+    75) state="unreadable: GitHub is throttled" ;;
+    *) echo "  ERROR: ${verdict}. Refusing to cut a release on a CI that is red or unread." >&2
        echo "  (If CI cannot run at all, e.g. credit depletion, re-run with --skip-ci-check.)" >&2; exit 1 ;;
   esac
+  hook="$(ci_push_gated)"
+  if [ -z "$hook" ]; then
+    echo "  ERROR: ${verdict}. CI ${state} and this checkout's pre-push hook is not goh's push gate," >&2
+    echo "  so nothing local says HEAD was gated -- re-run the release once CI has run, or --skip-ci-check." >&2
+    [ "$rc" = 75 ] && exit 75
+    exit 1
+  fi
+  echo "  ⚠ ${verdict}. CI ${state}: advisory, tagged on the local push gate (${hook}); loopctl tick re-reads the run."
 }
 
 VERSION="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"

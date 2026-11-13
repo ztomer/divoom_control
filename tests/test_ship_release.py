@@ -3,7 +3,7 @@
 goh refused divoom-control ("tags releases but declares no GOH_SHIP_RELEASE"). The kit it names,
 `scripts/ship_release.sh`, does what `scripts/release.sh` cannot do for itself: bump the five version
 places, cut CHANGELOG's Unreleased, commit, push (release.sh refuses a tag off origin/main), wait for
-that commit's CI, and only then exec release.sh.
+and exec release.sh, which reads CI once (EST.CIWAIT: never a wait).
 
 SEAMS: DIVOOM_LOOPCTL names the CI door (a stub here, answering loopctl's exit codes), and
 `scripts/release.sh` in the fixture is a stub that records when it ran and the version it read. Nothing
@@ -17,7 +17,7 @@ judgement, these pin the call and every exit code: 0 green, 1 red or unread, 3 p
 
 TEETH (each watched red): treat exit 3 or 4 as green and the not-green rows go red; drop `--wait` and
 the call-shape row goes red; drop the `git push` and the pushed-sha rows go red; call release.sh before
-the CI wait and the ordering row goes red; ignore the door's exit code and the not-green and throttled
+the release step and the ordering row goes red; ignore the door's exit code and the not-green and throttled
 rows go red; drop a crate from bump_version.CRATES and the version-places rows go red; delete the
 .gatesrc lines and the declaration rows go red.
 """
@@ -167,12 +167,22 @@ def test_bumps_every_version_place_cuts_the_changelog_and_commits(work):
     assert git(work, "log", "-1", "--format=%s") == "chore(release): version 1.0.1 - the thing is fixed"
 
 
-def test_pushes_the_release_commit_then_waits_for_its_ci_then_releases(work):
+def test_pushes_the_release_commit_then_releases_without_waiting_on_ci(work):
+    """EST.CIWAIT: hosted CI is advisory (owner 2026-11-11). The kit pushes through the pre-push gate
+    and hands over to release.sh, which reads CI once; the kit itself never asks CI, let alone waits."""
     r = ship(work, "1.0.1")
     assert r.returncode == 0, out(r)
     head = git(work, "rev-parse", "HEAD")
     assert git(work, "rev-parse", "origin/main") == head == git(work.parent / "origin.git", "rev-parse", "main")
-    assert log(work) == [f"loopctl ci {head} --repo divoom-control --wait", "release.sh 1.0.1"]
+    assert log(work) == ["release.sh 1.0.1"]
+
+
+def test_no_kit_line_waits_on_hosted_ci():
+    """EST.CIWAIT (goh GOH.CIWAIT): neither release script may poll or watch CI again."""
+    for name in ("ship_release.sh", "release.sh"):
+        code = [ln for ln in (REPO / "scripts" / name).read_text().splitlines() if not ln.lstrip().startswith("#")]
+        body = "\n".join(code)
+        assert "--wait" not in body and "run watch" not in body, name
 
 
 def test_a_resumed_ship_does_not_bump_twice(work):
@@ -188,24 +198,6 @@ def released(work: Path) -> bool:
     return any(line.startswith("release.sh") for line in log(work))
 
 
-@pytest.mark.parametrize(("rc", "says"), [("1", "red"), ("3", "pending"), ("4", "no CI")])
-def test_a_ci_that_is_not_green_stops_before_release(work, rc, says):
-    """loopctl's door: 1 red or unread, 3 still pending when --wait's bound ran out, 4 no CI at all
-    (this repo HAS CI, so a commit without any is no verdict). None of them is a green."""
-    r = ship(work, "1.0.1", ci=rc)
-    assert r.returncode == 1, out(r)
-    assert "CI is not green" in out(r) and says in out(r)
-    assert "stub verdict " + rc in out(r)  # loopctl's own verdict line reaches the log
-    assert not released(work)
-
-
-def test_throttled_github_is_exit_75_not_a_green(work):
-    r = ship(work, "1.0.1", ci="75")
-    assert r.returncode == 75
-    assert "throttled" in out(r)
-    assert not released(work)
-
-
 def test_the_ci_door_is_loopctl_and_the_advisory_job_is_declared_in_gatesrc():
     """DV.CIDOOR: the jobs are judged by loopctl, which reads .gatesrc's LOOP_CI_ADVISORY; the
     scripts name no job and no GitHub API path, and the old reader is gone."""
@@ -215,7 +207,7 @@ def test_the_ci_door_is_loopctl_and_the_advisory_job_is_declared_in_gatesrc():
         ["bash", "-c", script], cwd=REPO, capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL
     )
     assert done.stdout == "gate: runs the same ./tools/gate.sh the local pre-push gate already passed"
-    for name in ("ship_release.sh", "release.sh"):
+    for name in ("release.sh",):
         text = (REPO / "scripts" / name).read_text()
         assert "loopctl.py" in text and " ci " in text and "--repo divoom-control" in text
         assert "check-runs" not in text and "ci_jobs" not in text and '"gate"' not in text
@@ -314,11 +306,39 @@ def test_release_sh_asks_the_door_once_and_proceeds_on_green(release_work):
     assert log(release_work) == [f"loopctl ci {head} --repo divoom-control"]
 
 
-@pytest.mark.parametrize(("rc", "code"), [("1", 1), ("3", 1), ("4", 1), ("75", 75)])
-def test_release_sh_refuses_a_ci_that_is_not_green(release_work, rc, code):
+@pytest.mark.parametrize(("rc", "code"), [("1", 1), ("2", 1), ("3", 1), ("4", 1), ("75", 75)])
+def test_release_sh_refuses_a_ci_that_is_not_green_without_the_push_gate(release_work, rc, code):
+    """No goh push gate in the pre-push hook: nothing local says HEAD was gated, so only green tags."""
     r = release(release_work, rc)
     assert r.returncode == code, out(r)
     assert "stub verdict " + rc in out(r)
+
+
+def push_gated(w: Path) -> None:
+    hooks = w / ".githooks"
+    hooks.mkdir(exist_ok=True)
+    (hooks / "pre-push").write_text('#!/bin/sh\nexec bash "$GOH/gates/push_gate.sh" "$@"\n')
+    git(w, "config", "core.hooksPath", ".githooks")
+
+
+@pytest.mark.parametrize("rc", ["3", "4", "75"])
+def test_release_sh_tags_a_pending_ci_as_advisory_over_the_push_gate(release_work, rc):
+    """EST.CIWAIT: pending, none or throttled is advisory when the pre-push hook is goh's push gate;
+    one read, never a wait."""
+    push_gated(release_work)
+    r = release(release_work, rc)
+    assert r.returncode == 0, out(r)
+    assert "advisory" in out(r)
+    head = git(release_work, "rev-parse", "HEAD")
+    assert log(release_work) == [f"loopctl ci {head} --repo divoom-control"]
+
+
+@pytest.mark.parametrize("rc", ["1", "2"])
+def test_release_sh_refuses_a_red_ci_even_over_the_push_gate(release_work, rc):
+    push_gated(release_work)
+    r = release(release_work, rc)
+    assert r.returncode == 1, out(r)
+    assert "advisory" not in out(r)
 
 
 def test_gatesrc_declares_the_kit_the_way_goh_reads_it():
