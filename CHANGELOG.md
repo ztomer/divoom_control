@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+## v0.45.8 — release kits read hosted CI once and never wait on it
+
 - **No release step waits on hosted CI (EST.CIWAIT).** Hosted CI is advisory (owner 2026-11-11). `scripts/ship_release.sh` no longer runs `loopctl ci --wait` after its push; `scripts/release.sh` reads CI once: green tags, red or unread refuses, and pending, no run or throttled tags as advisory when the checkout's pre-push hook is goh's push gate (refused without one), the rule goh v0.110.0 uses (GOH.CIWAIT). Pinned by `tests/test_ship_release.py`.
 
 ## v0.45.7 — the tracked estate seeds are empty, every tag has its changelog heading, Cargo.lock is current
