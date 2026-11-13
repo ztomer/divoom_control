@@ -29,7 +29,7 @@ fn payloads() -> Vec<Vec<u8>> {
             .collect();
         out.push(base.clone());
         if length >= 3 {
-            let mut planted = base.clone();
+            let mut planted = base;
             planted[0] = 0x01;
             planted[length / 2] = 0x02;
             planted[length - 1] = 0x03;

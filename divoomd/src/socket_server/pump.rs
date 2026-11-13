@@ -82,7 +82,7 @@ where
                         // truth. Re-attach at the tail and send the
                         // latest value of every key, in publish order:
                         // no hole to report and nothing to drop for.
-                        let latest = conflated.map(|bus| bus.resync(rx)).unwrap_or_default();
+                        let latest = conflated.map_or_default(|bus| bus.resync(rx));
                         for event in &latest {
                             if write_line(stream, event).await.is_err() {
                                 eprintln!(

@@ -45,7 +45,7 @@ async fn sent_by(d: &Daemon, mac: &str) -> usize {
 }
 
 fn sent_count(m: &MockTransport) -> usize {
-    m.sent_commands.lock().map(|c| c.len()).unwrap_or_default()
+    m.sent_commands.lock().map_or_default(|c| c.len())
 }
 
 async fn call(d: &Daemon, method: &str, args: Value, kwargs: Value, mac: &str) -> Value {

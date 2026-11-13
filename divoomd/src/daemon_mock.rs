@@ -91,8 +91,7 @@ pub(crate) async fn cmd_mock_sent(daemon: &Daemon, req: &Request) -> Value {
     let sent: Vec<Value> = mock
         .sent_commands
         .lock()
-        .map(|c| c.iter().map(|(id, args)| json!([id, args])).collect())
-        .unwrap_or_default();
+        .map_or_default(|c| c.iter().map(|(id, args)| json!([id, args])).collect());
     json!({"success": true, "sent": sent})
 }
 

@@ -64,12 +64,11 @@ async fn set_time_manage_info(ctx: CallCtx<'_>) -> Value {
                 kw.and_then(|v| v.get("animation_frame_data"))
                     .and_then(|v| v.as_array())
             })
-            .map(|a| {
+            .map_or_default(|a| {
                 a.iter()
                     .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         payload.push(animation_id);
         payload.push(animation_speed);

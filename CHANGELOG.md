@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **Clean under rustc and clippy 1.100 (DV.GATE100).** Every `map(f).unwrap_or_default()` on an `Option` or `Result` is now `map_or_default(f)` (lib, tests and integration tests), and a redundant clone of a link event in `wall_outcome_tests.rs` is gone; no suppression added.
+
 - **The test-HOME guard recognises cargo's build-dir layout (DV.GATE100).** With a shared `build.build-dir`, the lib's unit-test binary sits at `build/divoomd/<hash>/out/divoomd-<hash>`, not under `deps/`, so `home::is_cargo_test_binary` missed it, the guard never moved HOME, and the sweep wrote into the planted owner home (`this_process_is_a_test_harness` and `a_sweep_of_every_command_leaves_the_owners_home_alone` red). The detector now also accepts an `out/` directory whose parent carries the binary's own hash; a mismatched hash or another directory is still refused.
 
 ## v0.45.6 — Divoom.app starts through goh launch-app (login environment), not a bare open

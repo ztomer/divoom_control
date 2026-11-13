@@ -51,10 +51,7 @@ async fn call(d: &Daemon, method: &str, args: Value, mac: &str) -> Value {
 
 /// Every command id one mock was asked to send, in order.
 fn sent_ids(m: &MockTransport) -> Vec<(u8, Vec<u8>)> {
-    m.sent_commands
-        .lock()
-        .map(|c| c.clone())
-        .unwrap_or_default()
+    m.sent_commands.lock().map_or_default(|c| c.clone())
 }
 
 #[tokio::test]

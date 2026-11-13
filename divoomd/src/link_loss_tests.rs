@@ -185,7 +185,7 @@ async fn a_dropped_link_is_reported_on_the_event_bus() {
     let mut disconnected = None;
     while let Ok(ev) = rx.try_recv() {
         if ev["type"] == json!("status") && ev["connected"] == json!(false) {
-            disconnected = Some(ev.clone());
+            disconnected = Some(ev);
         }
     }
     let ev = disconnected.expect("no disconnected status event was published");

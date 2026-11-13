@@ -38,8 +38,7 @@ fn drop_unreported(top: &mut Value, named: bool) -> Vec<String> {
 fn retain_reported(top: &mut Value, reported: &crate::reported_panels::Reported) -> Vec<String> {
     top.get_mut("devices")
         .and_then(Value::as_object_mut)
-        .map(|devices| reported.retain_admitted(devices))
-        .unwrap_or_default()
+        .map_or_default(|devices| reported.retain_admitted(devices))
 }
 
 /// The saved layout. In the owner's default location a placement no real

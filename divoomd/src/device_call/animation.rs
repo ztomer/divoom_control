@@ -29,12 +29,11 @@ fn kw_i64(kw: Option<&Map<String, Value>>, name: &str) -> Option<i64> {
 fn kw_bytes(kw: Option<&Map<String, Value>>, name: &str) -> Vec<u8> {
     kw.and_then(|m| m.get(name))
         .and_then(|v| v.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 async fn send(dev: &DeviceTransport, cmd: u8, payload: &[u8], label: &str) -> Value {

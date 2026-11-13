@@ -118,17 +118,14 @@ impl Discovered {
         name: String,
         props: Option<&btleplug::api::PeripheralProperties>,
     ) -> Self {
-        let manufacturer_data = props
-            .map(|pr| {
-                pr.manufacturer_data
-                    .iter()
-                    .map(|(k, v)| (*k, crate::wire::hex(v)))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let service_uuids = props
-            .map(|pr| pr.services.iter().map(ToString::to_string).collect())
-            .unwrap_or_default();
+        let manufacturer_data = props.map_or_default(|pr| {
+            pr.manufacturer_data
+                .iter()
+                .map(|(k, v)| (*k, crate::wire::hex(v)))
+                .collect()
+        });
+        let service_uuids =
+            props.map_or_default(|pr| pr.services.iter().map(ToString::to_string).collect());
         Self {
             name,
             id,

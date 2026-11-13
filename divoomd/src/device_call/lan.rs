@@ -36,8 +36,7 @@ pub(super) fn get_arg_i64(
 fn get_arg_i64_array(kw: Option<&serde_json::Map<String, Value>>, name: &str) -> Vec<i64> {
     kw.and_then(|m| m.get(name))
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(serde_json::Value::as_i64).collect())
-        .unwrap_or_default()
+        .map_or_default(|arr| arr.iter().filter_map(serde_json::Value::as_i64).collect())
 }
 
 fn get_arg_str(kw: Option<&serde_json::Map<String, Value>>, name: &str, default: &str) -> String {

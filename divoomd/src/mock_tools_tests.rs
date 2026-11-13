@@ -45,7 +45,7 @@ async fn sent_by(d: &Daemon, mac: &str) -> usize {
     let dev = d.fleet.get(mac).await.expect("the panel is in the fleet");
     let transport = dev.transport().await.expect("the panel is linked");
     match &*transport {
-        DeviceTransport::Mock(m) => m.sent_commands.lock().map(|c| c.len()).unwrap_or_default(),
+        DeviceTransport::Mock(m) => m.sent_commands.lock().map_or_default(|c| c.len()),
         _ => panic!("expected the mock transport"),
     }
 }

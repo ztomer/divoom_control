@@ -176,8 +176,7 @@ pub async fn handle_device_call(
         .args
         .get("args")
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(serde_json::Value::as_i64).collect())
-        .unwrap_or_default();
+        .map_or_default(|a| a.iter().filter_map(serde_json::Value::as_i64).collect());
 
     let raw_args: Vec<Value> = req
         .args

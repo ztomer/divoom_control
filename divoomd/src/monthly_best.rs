@@ -101,16 +101,13 @@ pub fn load_hotchannel_config() -> LoadedHotchannel {
         return LoadedHotchannel::default();
     };
 
-    let legacy_keys = raw
-        .as_object()
-        .map(|object| {
-            LEGACY_KEYS
-                .iter()
-                .filter(|key| object.contains_key(**key))
-                .map(|key| (*key).to_string())
-                .collect()
-        })
-        .unwrap_or_default();
+    let legacy_keys = raw.as_object().map_or_default(|object| {
+        LEGACY_KEYS
+            .iter()
+            .filter(|key| object.contains_key(**key))
+            .map(|key| (*key).to_string())
+            .collect()
+    });
 
     let mut config: HotchannelConfig = serde_json::from_value(raw).unwrap_or_default();
     if config.interval == 0 {

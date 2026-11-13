@@ -72,7 +72,7 @@ impl FakeDaemon {
     }
 
     fn requests(&self) -> Vec<Value> {
-        self.seen.lock().map(|g| g.clone()).unwrap_or_default()
+        self.seen.lock().map_or_default(|g| g.clone())
     }
 }
 

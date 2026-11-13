@@ -309,7 +309,7 @@ pub(crate) mod fake {
         /// blocks: the answer to everything this daemon was sent.
         #[must_use]
         pub fn requests(&self) -> Vec<Value> {
-            self.seen.lock().map(|g| g.clone()).unwrap_or_default()
+            self.seen.lock().map_or_default(|g| g.clone())
         }
     }
 }

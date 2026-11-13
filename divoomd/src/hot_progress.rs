@@ -80,7 +80,7 @@ impl HotProgress {
     /// `val` carrying the panel the update is for, when one is named.
     fn named(&self, val: &Value) -> Value {
         let mut v = val.clone();
-        let panel = self.panel.lock().map(|p| p.clone()).unwrap_or_default();
+        let panel = self.panel.lock().map_or_default(|p| p.clone());
         if let (false, Some(obj)) = (panel.is_empty(), v.as_object_mut()) {
             obj.insert("mac".into(), json!(panel));
         }

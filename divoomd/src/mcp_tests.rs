@@ -96,10 +96,7 @@ async fn a_success_is_text_and_the_same_structured_object() {
     assert_eq!(r.is_error, Some(false));
     let want = json!({ "ok": true, "level": 7 });
     assert_eq!(r.structured_content, Some(want.clone()));
-    let text = r.content[0]
-        .as_text()
-        .map(|t| t.text.clone())
-        .unwrap_or_default();
+    let text = r.content[0].as_text().map_or_default(|t| t.text.clone());
     assert_eq!(serde_json::from_str::<Value>(&text).ok(), Some(want));
 }
 
@@ -118,10 +115,7 @@ async fn a_refusal_carries_the_daemons_code() {
         )
         .await;
     assert_eq!(r.is_error, Some(true));
-    let text = r.content[0]
-        .as_text()
-        .map(|t| t.text.clone())
-        .unwrap_or_default();
+    let text = r.content[0].as_text().map_or_default(|t| t.text.clone());
     assert_eq!(
         serde_json::from_str::<Value>(&text).ok(),
         Some(json!({ "error": "no panel 'X'", "code": "unknown_device" }))

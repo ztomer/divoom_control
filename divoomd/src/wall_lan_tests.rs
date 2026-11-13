@@ -59,8 +59,7 @@ async fn wall_configure_leaves_a_lan_panel_out_and_says_why() {
         .lock()
         .await
         .as_ref()
-        .map(|w| w.devices.iter().map(|s| s.mac.clone()).collect())
-        .unwrap_or_default();
+        .map_or_default(|w| w.devices.iter().map(|s| s.mac.clone()).collect());
     assert_eq!(
         macs,
         vec![A.to_string()],

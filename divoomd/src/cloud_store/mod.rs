@@ -35,8 +35,7 @@ pub(crate) fn write_private(path: &Path, data: &str) -> Result<(), String> {
     }
     let mut temp_name = path
         .file_name()
-        .map(std::ffi::OsStr::to_os_string)
-        .unwrap_or_default();
+        .map_or_default(std::ffi::OsStr::to_os_string);
     temp_name.push(".tmp");
     let temp_path = path.with_file_name(temp_name);
     std::fs::write(&temp_path, data).map_err(|e| e.to_string())?;
@@ -50,9 +49,7 @@ pub(crate) fn write_private(path: &Path, data: &str) -> Result<(), String> {
 }
 
 fn read_ini(path: &Path) -> (String, String) {
-    std::fs::read_to_string(path)
-        .map(|c| ini::parse_divoom_section(&c))
-        .unwrap_or_default()
+    std::fs::read_to_string(path).map_or_default(|c| ini::parse_divoom_section(&c))
 }
 
 /// The `[divoom]` email and the password, wherever it lives. ("","") if absent.

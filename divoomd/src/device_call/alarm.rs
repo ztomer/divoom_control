@@ -190,12 +190,11 @@ async fn set_alarm_gif(ctx: CallCtx<'_>) -> Value {
         .get(3)
         .and_then(|v| v.as_array())
         .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
     let mut payload = Vec::with_capacity(4 + data.len());
     payload.push(alarm_index);
@@ -378,12 +377,11 @@ async fn set_memorial_gif(ctx: CallCtx<'_>) -> Value {
         .get(3)
         .and_then(|v| v.as_array())
         .or_else(|| kw.and_then(|v| v.get("data")).and_then(|v| v.as_array()))
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|x| x.as_u64().map(super::super::wire::WireNarrow::byte))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
     let mut payload = Vec::with_capacity(4 + data.len());
     payload.push(memorial_index);
