@@ -54,7 +54,7 @@ CI_CLIPPY_ARGS=(-p divoomd --all-targets --all-features -- -D warnings)
 # is built once and cached under a tag that carries the base's, so raising
 # BASE_TAG builds a new image instead of reusing the old toolchain's.
 # tests/test_linux_all_features_parity.py holds both to a named release.
-BASE_TAG="${DIVOOM_LINUX_LINT_BASE_TAG:-1.99.1-trixie}"
+BASE_TAG="${DIVOOM_LINUX_LINT_BASE_TAG:-1.100.0-trixie}"
 BASE_IMAGE="${DIVOOM_LINUX_LINT_BASE_IMAGE:-rust:$BASE_TAG}"
 IMAGE="${DIVOOM_LINUX_LINT_IMAGE:-divoom-linux-lint:$BASE_TAG}"
 # Where the container's cargo target dir lives: a docker NAMED volume. It is
