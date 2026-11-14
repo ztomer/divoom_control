@@ -6,21 +6,23 @@ Control Divoom pixel-display devices (Pixoo / Tivoo / Timebox / Ditoo …) as a
 **Python library**, a **headless daemon** (local or over the network), and a
 **desktop Control Center app**.
 
-The project has three Python packages, two native **Rust** binaries (the daemon
-and the menu-bar agent), and a native accelerator:
+The project has three Python packages and three native **Rust** workspace crates (`divoomd`,
+`divoom-menubar`, and `nowplaying`):
 
-1. **`divoom_lib/`** — the shared protocol core: SPP framing, the command and
-   capability models, the transport interface, cloud auth, the native-library
-   loader, plus the CLI (`divoom-control`) and the MCP server, both of which are
-   daemon clients. Runs on **macOS and Linux**. (The direct-to-device Python
-   library — the `Divoom` facade and its BLE/LAN/SPP transports — is retired
-   from the product and lives on as `examples/divoom_legacy/`, standalone.)
+1. **`divoom_lib/`** — the shared protocol core: SPP framing parsing, the command and
+   capability models, the transport interface, cloud auth, plus the CLI
+   (`divoom-control`), all daemon clients (`cli mcp-server` delegates to `divoomd mcp`).
+   Runs on **macOS and Linux**. (The direct-to-device Python library — the `Divoom` facade
+   and its BLE/LAN/SPP transports — is retired from the product and lives on as
+   `examples/divoom_legacy/`, standalone.)
 2. **`divoomd/`** — the native **Rust** daemon: a headless, always-on agent that
    is the **single owner** of the device connection and serves a command/event
-   protocol over a Unix socket and (optionally) TCP. On macOS it also does
-   notification monitoring. Runs on **macOS and Linux**. Paired with a **native
-   Rust menu-bar agent**, `divoom-menubar/` — together these are what
-   the shipped app runs. `divoom_client/` (the Python package) is client-only:
+   protocol over a Unix socket and (optionally) TCP, plus `divoomd mcp`. On macOS it also does
+   notification monitoring and delegates Now Playing metadata/artwork to the `nowplaying`
+   Swift/ObjC helper crate (`scripts/build_nowplaying_helper.sh`). Runs on **macOS and Linux**.
+   Paired with the **native Rust menu-bar agent**, `divoom-menubar/` (winit + tray-icon,
+   macOS only) — together these are what the shipped app runs. `divoom_client/` (the Python
+   package) is client-only:
    the shared NDJSON-socket client library every consumer (GUI, menubar, CLI,
    MCP) uses to talk to whichever daemon is running. The original Python daemon
    *server* implementation was archived (2026-07-13) and then removed from the
@@ -77,13 +79,12 @@ call it.
   targets (i686 / armv7) are not supported on any OS. (BLE via `bleak` in Python /
   `btleplug` in Rust — CoreBluetooth on macOS, BlueZ on Linux). The **GUI +
   menu-bar + now-playing sync are macOS-only** today.
-- **Python 3.14** (uses `X | None` type syntax). CI and the shipped app build on
-  **Python 3.14**.
-- Python deps in `requirements.txt` (`bleak`, `aiohttp`, `pillow`, `pywebview`, …).
+- **Python 3.15** (`requires-python = ">=3.15"` in `pyproject.toml`). CI and the
+  shipped app build on **Python 3.15**.
+- Python deps in `pyproject.toml` (`pip install -e ".[dev]"` or `.[gui,test]`).
 - **Rust** (stable, via `rustup`) to build the daemon (`divoomd`) + menu-bar —
-  `./build.sh`.
-- A C compiler (clang/gcc) is optional — only to build the native accelerator;
-  without it everything falls back to pure Python.
+  `./build.sh` (which also builds the macOS `nowplaying` helper binary via
+  `scripts/build_nowplaying_helper.sh`).
 
 ## Install
 
@@ -105,8 +106,8 @@ daemon). The first scan prompts once for Bluetooth — grant it. Requires macOS 
 ### From source (library / daemon / dev)
 
 ```bash
-pip install -r requirements.txt        # or: pip install -e .
-# build the native Rust daemon + menu-bar (+ the C accelerator dylib):
+pip install -e ".[gui]"               # or: pip install -e ".[dev]" for test extras
+# build the native Rust daemon + menu-bar (+ macOS nowplaying helper):
 ./build.sh
 # then run the GUI (it auto-spawns the daemon + menu-bar):
 ./run.sh
@@ -168,7 +169,7 @@ gate keeps it that way.
 
 ```
 divoom_lib/            Shared protocol core (macOS + Linux)
-  framing.py             SPP framing/escaping (native-accelerated + Python)
+  framing.py             SPP RX frame parser (encoding lives in divoomd::framing)
   models/                command tables, capabilities, constants
   transport.py           transport interface + command routing map
   divoom_auth.py         cloud credentials (Keychain-backed)
@@ -188,7 +189,8 @@ divoom_client/         Daemon CLIENT library (spawn/find/talk to divoomd)
   daemon_protocol.py     NDJSON wire protocol + DaemonClient
   macos_notifications.py notification_router.py   notification plumbing (macOS)
 divoomd/               The daemon (Rust): device ownership, command dispatch,
-                          Unix/TCP server, macOS notification monitoring
+                          Unix/TCP server, macOS notification monitoring, `divoomd mcp`
+nowplaying/            Rust wrapper + Objective-C MediaRemote helper (`scripts/build_nowplaying_helper.sh`)
 divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon client
   gui_main.py            launcher + Python↔JS bridge; spawns divoomd + divoom-menubar
   daemon_bridge.py       re-exports ensure_daemon()/DaemonDeviceProxy for the GUI
@@ -196,6 +198,7 @@ divoom_gui/            Desktop Control Center (pywebview, macOS) — daemon clie
 divoom-menubar/        the menu-bar/tray agent, Rust (winit + tray-icon)
 build.sh / run.sh      build the Rust binaries / run the GUI (+ daemon + menubar)
 scripts/build_release.sh     build the shippable Divoom.app + dmg (py2app)
+tools/gate.sh --full   local CI gate mirroring .github/workflows/tests.yml
 docs/                  ROADMAP, protocol refs, release docs
 tests/                 pytest suite
 ```
