@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+## v0.45.10 — open -g of Divoom draws without foregrounding (re-verified 0.45.9); a raster frame loaded while covered paints its bench node
+
 - **Covered bench nodes paint async preview frames and `open -g` launch path is pinned (DV.BGLAUNCH).** Re-verified `open -g` on `0.45.9` (`first_paint.py` keeps WebKit occlusion detection off so background/covered windows paint and stay painted without activation). Fixed one remaining covered-window gap: while `window.__divoomCovered` holds `spatial_stage.js`'s animation loop, `refreshBenchNodes()` now draws nodes after restoring the selected panel's preview, and `preview_controller.js`'s `img.onload` dispatches `divoom:preview-frame-loaded` so asynchronously loaded raster previews paint immediately even while covered. Pinned by `test_a_frame_loaded_while_window_is_covered_paints_its_node` (red 0/256 green before the fix) and `test_installed_app_open_g_paints_without_foregrounding` (`DIVOOM_WINDOW_TESTS=1`).
 
 ## v0.45.9 — Linux lint: no unused deps, no legacy builder, replaced images removed

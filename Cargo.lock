@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "divoom-menubar"
-version = "0.45.9"
+version = "0.45.10"
 dependencies = [
  "image",
  "objc2-app-kit 0.3.2",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "divoomd"
-version = "0.45.9"
+version = "0.45.10"
 dependencies = [
  "aes",
  "base64",
