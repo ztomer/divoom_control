@@ -24,6 +24,14 @@ library crate and versions independently — the same exclusion
 Not built is not a failure. CI builds only what it needs, and a fresh checkout
 has nothing at all; failing there would make the gate fire on the absence of a
 problem. A binary that EXISTS and disagrees is the failure.
+
+**A red names the ONE command that clears it** (DV.SHIPCUT, 2026-11-14). The gate fails on a local
+build artifact, not on the tree, so the fix is a build, and the message is that build: a single
+`Fix:` line, one `cargo build --locked [--release] -p X...` per flavour the stale binaries came from
+(`target/release` is refreshed only by a release build). It used to print a hint per binary,
+`cargo build -p X    (add --release to refresh target/release)`, which left the flag to the reader.
+It does not rebuild by itself: a release build is minutes, and a gate that quietly rewrites the
+artifacts it judges would never be seen red.
 """
 
 from __future__ import annotations
@@ -39,11 +47,26 @@ from divoom_client.binary_resolver import (  # noqa: E402
     PRODUCT_BINARIES,
     binary_version,
     built_candidates,
-    rebuild_hint,
 )
 from divoom_client.daemon_version import expected_daemon_version  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+def fix_command(stale: list[Path]) -> str:
+    """One shell command that rebuilds every path in `stale` (target/<flavour>/<name>)."""
+    by_flavour: dict[str, list[str]] = {}
+    for path in stale:
+        names = by_flavour.setdefault(path.parent.name, [])
+        if path.name not in names:
+            names.append(path.name)
+    runs = []
+    for flavour in ("release", "debug"):
+        if flavour in by_flavour:
+            mode = " --release" if flavour == "release" else ""
+            crates = " ".join(f"-p {n}" for n in by_flavour[flavour])
+            runs.append(f"cargo build --locked{mode} {crates}")
+    return " && ".join(runs)
 
 
 def main() -> int:
@@ -55,6 +78,7 @@ def main() -> int:
         return 0
 
     failures: list[str] = []
+    stale: list[Path] = []
     checked = 0
     for name in PRODUCT_BINARIES:
         # THIS tree's target/, not the imported package's: divoom_client is an
@@ -66,6 +90,7 @@ def main() -> int:
             got = binary_version(path)
             if got == expected:
                 continue
+            stale.append(path)
             # Shorten for readability only. A path outside the repo is not a
             # reason to raise from inside a FAILURE branch — that would replace
             # the diagnosis with a traceback, which is precisely the failure
@@ -76,16 +101,16 @@ def main() -> int:
                 rel = path
             if got is None:
                 failures.append(
-                    f"{rel} does not answer --version — it predates the flag, "
-                    f"so it is older than {expected}. Rebuild: {rebuild_hint(name)}"
+                    f"{rel} does not answer --version — it predates the flag, so it is older than {expected}"
                 )
             else:
-                failures.append(f"{rel} reports {got}, but this tree is {expected}. Rebuild: {rebuild_hint(name)}")
+                failures.append(f"{rel} reports {got}, but this tree is {expected}")
 
     if failures:
         err("[built-bins] stale binaries on disk")
         for f in failures:
             info(f)
+        info(f"Fix: {fix_command(stale)}")
         return 1
 
     if checked == 0:

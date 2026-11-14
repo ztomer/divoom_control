@@ -355,3 +355,36 @@ def test_the_real_release_sh_still_names_the_repo_the_kit_reads():
     assert subprocess.run(
         ["sed", "-n", 's/^REPO="\\([^"]*\\)".*/\\1/p'], input=text, capture_output=True, text=True, check=True
     ).stdout.split() == ["ztomer/divoom_control"]
+
+
+# ── DV.SHIPCUT (1): the kit cuts Unreleased itself, also into a version already bumped ─────────────
+
+
+def test_the_0_45_6_shape_moves_unreleased_into_the_bumped_stanza_and_releases(work):
+    """0.45.6 was bumped (its stanza written), then fix commits added `## Unreleased` entries, as agents
+    are told to. The resumed ship skipped the cut and its check refused the tag ("move them into the
+    v0.45.6 stanza"), so the coordinator moved them by hand (601c5bd). The kit moves them itself."""
+    assert ship(work, "1.0.1").returncode == 0
+    text = (work / "CHANGELOG.md").read_text()
+    fix = "- **A later fix (X.2).** Landed after the bump, entered under Unreleased.\n"
+    (work / "CHANGELOG.md").write_text(text.replace("## Unreleased\n", "## Unreleased\n\n" + fix, 1))
+    git(work, "commit", "-q", "-am", "fix: a later fix")
+    r = ship(work, "1.0.1")
+    assert r.returncode == 0, out(r)
+    text = (work / "CHANGELOG.md").read_text()
+    unreleased = text[text.index("## Unreleased") : text.index("## v1.0.1")]
+    assert unreleased.strip() == "## Unreleased", unreleased
+    stanza = text[text.index("## v1.0.1") : text.index("## v1.0.0")]
+    assert "A later fix (X.2)" in stanza and "A thing is fixed (X.1)" in stanza
+    assert text.count("## v1.0.1") == 1
+    assert not git(work, "status", "--porcelain", "--untracked-files=no")
+    assert git(work, "rev-parse", "origin/main") == git(work, "rev-parse", "HEAD")
+    assert log(work)[-1] == "release.sh 1.0.1"
+
+
+def test_a_resumed_ship_with_an_empty_unreleased_commits_nothing(work):
+    assert ship(work, "1.0.1").returncode == 0
+    before = git(work, "rev-parse", "HEAD")
+    r = ship(work, "1.0.1")
+    assert r.returncode == 0, out(r)
+    assert git(work, "rev-parse", "HEAD") == before

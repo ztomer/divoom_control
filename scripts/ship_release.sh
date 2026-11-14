@@ -8,7 +8,10 @@
 #   1. bump       the version in every place it lives (scripts/bump_version.py), then CHANGELOG.md's
 #                 Unreleased cut into `## vX.Y.Z -- <summary>` (goh's changelog_cut.py, title from
 #                 GOH_SHIP_SUMMARY), committed as `chore(release): version X.Y.Z - <summary>`.
-#                 Skipped when HEAD's pyproject already declares VERSION (a resumed ship).
+#                 When HEAD's pyproject already declares VERSION (a resumed ship, or a bump followed
+#                 by fix commits) the bump is skipped, and any entries Unreleased gained since are cut
+#                 into VERSION's stanza and committed (DV.SHIPCUT), so the check below never meets
+#                 a release whose Unreleased still holds lines.
 #   2. push       HEAD to origin/main through the pre-push gate. release.sh refuses a tag whose commit
 #                 is not on origin/main (D.RELTAG), so the release commit must be there first; this is
 #                 why the kit pushes and goh's own push step is skipped (GOH_SHIP_RELEASE_PUSHES=1).
@@ -38,9 +41,31 @@ SUMMARY="${GOH_SHIP_SUMMARY:-}"
 [ -z "$(git status --porcelain --untracked-files=no)" ] \
   || die "release refused: uncommitted tracked changes -- the release commit would carry them; nothing changed"
 
+# Whether any `## Unreleased` section of CHANGELOG.md holds a non-blank line.
+unreleased_holds() {
+  awk '/^## /{u = ($0 ~ /^## \[?[Uu]nreleased\]?([[:space:]]|$)/); next} u && NF {f = 1} END {exit !f}' CHANGELOG.md
+}
+commit() { # Through the pre-commit hook, never around it. The trailer is the caller's, if it has one.
+  if [ -n "${DIVOOM_RELEASE_TRAILER:-}" ]; then
+    git commit -q -m "$1" -m "$DIVOOM_RELEASE_TRAILER"
+  else
+    git commit -q -m "$1"
+  fi
+  ok "committed $(git rev-parse --short HEAD)"
+}
+
 DECLARED="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
 if [ "$DECLARED" = "$V" ]; then
   info "pyproject.toml already declares ${V} -- not bumping again"
+  # DV.SHIPCUT: entries added under Unreleased after the bump (fix commits, as agents are told to
+  # write them) ship with this tag, so they move into its stanza here, not by hand.
+  if unreleased_holds; then
+    info "Unreleased holds entries landed after the bump -- moving them into the v${V} stanza"
+    python3 "$GOH/tools/release-kit/changelog_cut.py" cut --version "$V" --file CHANGELOG.md \
+      || die "CHANGELOG cut refused (above) -- nothing committed"
+    git add CHANGELOG.md
+    commit "chore(release): v${V} takes the entries Unreleased gained after its bump"
+  fi
 else
   info "bumping ${DECLARED} → ${V}"
   python3 scripts/bump_version.py "$V" || die "version bump refused (above)"
@@ -50,13 +75,7 @@ else
   git add pyproject.toml divoomd/Cargo.toml divoom-menubar/Cargo.toml Cargo.lock CHANGELOG.md
   msg="chore(release): version ${V}"
   [ -z "$SUMMARY" ] || msg="${msg} - ${SUMMARY}"
-  # Through the pre-commit hook, never around it. The trailer is the caller's, if it has one.
-  if [ -n "${DIVOOM_RELEASE_TRAILER:-}" ]; then
-    git commit -q -m "$msg" -m "$DIVOOM_RELEASE_TRAILER"
-  else
-    git commit -q -m "$msg"
-  fi
-  ok "committed $(git rev-parse --short HEAD)"
+  commit "$msg"
 fi
 python3 "$GOH/tools/release-kit/changelog_cut.py" check --version "$V" --file CHANGELOG.md \
   || die "CHANGELOG has no clean stanza for ${V} (above) -- nothing pushed"
