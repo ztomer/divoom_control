@@ -125,10 +125,11 @@ def _assert_pairs_distinct(rendered: dict[str, list[list[float]]]) -> None:
             )
 
 
-async def _open(p):
-    """The real page, at 2x, with the motion off."""
+async def _open(p, scheme: str = "dark"):
+    """The real page, at 2x, with the motion off, in the appearance `scheme` (the theme follows it,
+    DV.WEBUILIGHT, so each theme is its own backdrop and both are measured)."""
     browser = await launch_browser(p)
-    context = await browser.new_context(device_scale_factor=2)
+    context = await browser.new_context(device_scale_factor=2, color_scheme=scheme)
     page = await context.new_page()
     await add_init_js(page, MOCK_API)
     await page.goto(f"file://{INDEX_HTML}")
@@ -244,13 +245,16 @@ async def test_the_key_teaches_the_vocabulary_in_settings_devices():
 
 
 @pytest.mark.asyncio
-async def test_every_pair_of_dot_states_differs_in_greyscale():
-    """The P7.2 gate: no two states may share a look once colour is gone."""
+@pytest.mark.parametrize("scheme", ["dark", "light"])
+async def test_every_pair_of_dot_states_differs_in_greyscale(scheme):
+    """The P7.2 gate: no two states may share a look once colour is gone, in either theme. In the
+    light theme a connect in flight (amber, luma 167) and the dimmed grey of no link (198 over the
+    light page) were 31 apart, under the visible step of 64: only the hue told them apart."""
     require_browser()
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser, page = await _open(p)
+        browser, page = await _open(p, scheme)
         try:
             rendered = await _render_states(page)
             _assert_pairs_distinct(rendered)
@@ -259,7 +263,8 @@ async def test_every_pair_of_dot_states_differs_in_greyscale():
 
 
 @pytest.mark.asyncio
-async def test_the_disconnected_mark_differs_from_a_full_strength_hollow_in_ink():
+@pytest.mark.parametrize("scheme", ["dark", "light"])
+async def test_the_disconnected_mark_differs_from_a_full_strength_hollow_in_ink(scheme):
     """Disconnected is a DIM hollow; a connect in flight is a FULL one.
 
     They are the same shape on purpose — the shape carries the transport, and
@@ -272,7 +277,7 @@ async def test_the_disconnected_mark_differs_from_a_full_strength_hollow_in_ink(
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser, page = await _open(p)
+        browser, page = await _open(p, scheme)
         try:
             rendered = await _render_states(page)
             backdrop = await _backdrop(page)

@@ -157,6 +157,14 @@
     opacity: 1;
 }
 
+/* On the light page amber is a mid grey (luma 167) beside the dimmed grey of no link (198 over
+   the page): 31 apart, under the visible step, so only the hue told "connecting" from
+   "disconnected". The light theme's own amber for text is dark enough to carry it (DV.WEBUILIGHT;
+   tests/test_e2e_transport_mark_greyscale.py measures both themes). */
+body.theme-light .transport-mark.mark-pending {
+    color: var(--warn-text);
+}
+
 /* The pulse: a connect in flight. It REINFORCES the hollow fill — the fill
    already says "not linked yet" — so the mark is still legible in a still
    frame, and the fill is what the greyscale gate measures. */

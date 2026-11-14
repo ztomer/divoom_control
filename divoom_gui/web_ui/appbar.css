@@ -86,6 +86,12 @@
 #global-status-dot.mark-linked {
     box-shadow: 0 0 8px currentColor;
 }
+/* Not on the light page: there a glow in the mark's hue fills the circle's corners to within the
+   visible step of its ink, so the Bluetooth circle and the Wi-Fi square read as one shape in
+   greyscale (DV.WEBUILIGHT; the greyscale gate measures both themes). */
+body.theme-light #global-status-dot.mark-linked {
+    box-shadow: none;
+}
 
 .appbar-logo {
     width: 18px;
