@@ -44,6 +44,26 @@ class LifecycleSettingsMixin:
 
         return set_quit_menubar_on_exit(bool(value))
 
+    def set_theme_choice(self, choice) -> bool:
+        """DV.WINBG: the page chose (or booted in) a theme. Keep it where the next launch's
+        window can read it before the page exists, and put the open window in it now."""
+        from divoom_gui import window_theme
+
+        choice = str(choice)
+        if not window_theme.write_choice(choice):
+            return False
+        window = getattr(self, "window", None)
+        if window is not None:
+            try:
+                from PyObjCTools import AppHelper
+
+                nswindow = window_theme._cocoa_window(window)
+                if nswindow is not None:
+                    AppHelper.callAfter(window_theme.apply_to_window, nswindow, choice)
+            except ImportError:
+                pass
+        return True
+
     def get_versions(self) -> str:
         """The Version card: the dashboard's own version, and the daemon's as
         it reports itself (`get_status.daemon_version`, plus the protocol),

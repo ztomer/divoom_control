@@ -101,6 +101,7 @@
   "set_solid_light",
   "set_sync_targets",
   "set_temp_unit",
+  "set_theme_choice",
   "set_tickers",
   "set_timer",
   "set_topology",

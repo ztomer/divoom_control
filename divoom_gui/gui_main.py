@@ -219,7 +219,13 @@ def main():
     import time
     from urllib.parse import urlencode
 
+    # DV.WINBG: the theme the window and the page both start in, read before either exists.
+    from divoom_gui import window_theme
+
+    theme_choice = window_theme.read_choice()
     query = {"t": int(time.time())}
+    if theme_choice is not None:
+        query["theme"] = theme_choice
     if cli_args.tab:
         query["tab"] = cli_args.tab
     if cli_args.card:
@@ -234,10 +240,12 @@ def main():
         resizable=True,
         frameless=True,  # Integrated custom Appbar
         easy_drag=False,
-        background_color="#0a0b10",
+        background_color=window_theme.launch_background(theme_choice),
         min_size=(1050, 400),
     )
     api.window = window
+    if sys.platform == "darwin":
+        window_theme.theme_window(window, theme_choice)
     # DV.BGLAUNCH: `open -g` (every `goh ship` relaunch) opens the window behind the
     # owner's, and WKWebView paints nothing in (and in time drops) a covered window's page.
     if sys.platform == "darwin":

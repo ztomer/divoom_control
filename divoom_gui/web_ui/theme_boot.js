@@ -12,6 +12,11 @@
  *
  * Loaded first in <body>, synchronously, so the first paint is already in the right theme.
  * settings_hardware.js wires the Appearance buttons to window.DivoomTheme.choose().
+ *
+ * DV.WINBG: the native window draws before this page does, so it must know the choice too.
+ * The app keeps it in config.ini and hands it to the page as `?theme=`; that wins over
+ * localStorage, and every choice (and a boot without `?theme=`, from before the app kept
+ * it) is reported back through pywebview's `set_theme_choice`.
  */
 (function () {
     "use strict";
@@ -20,6 +25,15 @@
     var LEGACY = "aesthetic-theme";
     var CHOICES = ["dark", "light", "system"];
     var query = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+
+    function fromUrl() {
+        try {
+            var v = new URLSearchParams(window.location.search).get("theme");
+            return CHOICES.indexOf(v) >= 0 ? v : null;
+        } catch (_) {
+            return null;
+        }
+    }
 
     function stored() {
         try {
@@ -35,7 +49,24 @@
         return query && query.matches ? "light" : "dark";
     }
 
-    var current = stored();
+    var given = fromUrl();
+    var current = given || stored();
+
+    function keep(choice) {
+        try {
+            window.localStorage.setItem(KEY, choice);
+        } catch (_) { /* not kept across launches; still drawn now */ }
+    }
+
+    // The window's own background and appearance follow the choice (DV.WINBG).
+    function tellApp(choice) {
+        var send = function () {
+            var api = window.pywebview && window.pywebview.api;
+            if (api && api.set_theme_choice) api.set_theme_choice(choice);
+        };
+        if (window.pywebview && window.pywebview.api) send();
+        else window.addEventListener("pywebviewready", send, { once: true });
+    }
 
     function paint() {
         var body = document.body;
@@ -50,6 +81,8 @@
         window.localStorage.removeItem(LEGACY);
     } catch (_) { /* storage unavailable: the choice is simply not kept */ }
     paint();
+    if (given) keep(given);
+    else tellApp(current);
 
     if (query) {
         var follow = function () {
@@ -69,9 +102,8 @@
         choose: function (choice) {
             if (CHOICES.indexOf(choice) < 0) return;
             current = choice;
-            try {
-                window.localStorage.setItem(KEY, choice);
-            } catch (_) { /* not kept across launches; still drawn now */ }
+            keep(choice);
+            tellApp(choice);
             paint();
         },
     };
