@@ -340,7 +340,7 @@ def test_the_gate_fails_when_a_built_binary_is_stale(tmp_path, monkeypatch, caps
     said = capsys.readouterr()
     said = said.out + said.err
     assert "reports 0.27.0, but this tree is 0.28.2" in said
-    assert "Rebuild: cargo build -p divoomd" in said
+    assert "Fix: cargo build --locked --release -p divoomd" in said
 
 
 def test_the_gate_skips_rather_than_fails_when_nothing_is_built(tmp_path, monkeypatch):
