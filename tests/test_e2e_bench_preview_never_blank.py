@@ -132,3 +132,55 @@ async def test_nodes_are_redrawn_when_the_page_comes_back_on_screen():
             assert all(n > 0 for n in lit.values()), f"node previews not redrawn on return: {lit}"
         finally:
             await browser.close()
+
+
+def _solid_green_png_data_url():
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (0, 255, 0)).save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+@pytest.mark.asyncio
+async def test_a_frame_loaded_while_window_is_covered_paints_its_node():
+    """DV.BGLAUNCH: while the window is covered (`__divoomCovered`), the animation loop is held.
+    A raster frame arriving then finishes `img.onload` asynchronously; it must still paint
+    onto the node canvas instead of leaving the pre-load glyph/blank frame."""
+    require_browser()
+    from playwright.async_api import async_playwright
+
+    mac = PANELS[0][0]
+    green_url = _solid_green_png_data_url()
+    async with async_playwright() as p:
+        browser, page = await _bench(p)
+        try:
+            await wait_js(page, f"() => Object.values(({_LIT})()).every(n => n > 0)")
+            await eval_js(
+                page,
+                "() => { window.__divoomCovered = true; window.dispatchEvent(new Event('divoom:window-covered')); }",
+            )
+            await eval_js(
+                page,
+                "(args) => window.Divoom.onActivity("
+                "{type: 'activity', mac: args.mac, kind: 'image', preview: args.url})",
+                {"mac": mac, "url": green_url},
+            )
+            await wait_js(page, f"() => !!window.DisplayPreviewRegistry?.get({mac!r})?.imgLoaded")
+            green_pixels = await eval_js(
+                page,
+                """(m) => {
+                    const c = document.getElementById('stage-canvas-' + m);
+                    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+                    let g = 0;
+                    for (let i = 0; i < d.length; i += 4) if (d[i] < 40 && d[i + 1] > 180 && d[i + 2] < 40) g++;
+                    return g;
+                }""",
+                mac,
+            )
+            assert green_pixels == 16 * 16, f"covered node canvas did not paint loaded frame ({green_pixels}/256 green)"
+        finally:
+            await browser.close()

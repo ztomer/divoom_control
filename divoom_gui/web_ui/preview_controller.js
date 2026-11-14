@@ -87,8 +87,10 @@
                 this.imgLoaded = false;
                 const img = new Image();
                 img.onload = () => {
+                    if (this.cachedSrc !== src) return;
                     this.imgLoaded = true;
                     this.cachedImg = img;
+                    window.dispatchEvent(new CustomEvent("divoom:preview-frame-loaded", { detail: { mac: this.mac } }));
                 };
                 img.onerror = () => {
                     this.imgLoaded = false;

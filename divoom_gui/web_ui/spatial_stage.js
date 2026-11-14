@@ -249,8 +249,6 @@
             bench.appendChild(node);
         });
         if (!bench.querySelector('.spatial-node')) showEmptyRoom(bench);
-        drawNodes();
-
         // Show the selected panel's preview and channel controls the first time
         // the bench shows it -- not on every refresh: a scan result re-renders
         // the bench. And a refresh never moves the channel tab once the user
@@ -269,6 +267,7 @@
                 window.restoreDevicePreview(activeAddr, null, { keepTab: !!window.DivoomState?.channelChosen });
             }
         }
+        drawNodes();
     }
 
     // The ribbon (the collapsed bench) shows no room filter, so it lists every panel.
@@ -487,6 +486,7 @@
         }
         document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'hidden') drawNodes(); });
         window.addEventListener('pageshow', drawNodes);
+        window.addEventListener('divoom:preview-frame-loaded', drawNodes);
         renderLoop();
     }
 

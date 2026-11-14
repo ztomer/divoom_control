@@ -11,6 +11,7 @@ the finding itself. A real pywebview window opens under an opaque cover; the cap
 that window must hold the page. Without the fix the same capture is one flat colour.
 """
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -142,8 +143,11 @@ def test_the_render_loop_stops_while_covered_and_resumes():
     covered = (web / "window_covered.js").read_text()
     assert "window.__divoomCovered" in covered and f'"{first_paint.COVERED_EVENT}"' in covered
     loop = (web / "spatial_stage.js").read_text()
-    loop = loop[loop.index("function renderLoop()") :][:200]
-    assert "if (window.DivoomCovered?.hold(renderLoop)) return;" in loop
+    loop_fn = loop[loop.index("function renderLoop()") :][:200]
+    assert "if (window.DivoomCovered?.hold(renderLoop)) return;" in loop_fn
+    assert "divoom:preview-frame-loaded" in loop
+    preview = (web / "preview_controller.js").read_text()
+    assert "divoom:preview-frame-loaded" in preview
     html = (web / "index.html").read_text()
     assert html.index('src="window_covered.js"') < html.index('src="spatial_stage.js"')
 
@@ -209,16 +213,24 @@ _COVER = textwrap.dedent(
 )
 
 
-def _window_id(title, deadline_s=20.0):
+def _find_window(*, title, owner=None, deadline_s=20.0):
     import Quartz
 
     end = time.monotonic() + deadline_s
     while time.monotonic() < end:
         for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID):
-            if w.get("kCGWindowName") == title and w.get("kCGWindowLayer") == 0:
-                return int(w["kCGWindowNumber"])
+            if w.get("kCGWindowName") != title or w.get("kCGWindowLayer") != 0:
+                continue
+            if owner is not None and w.get("kCGWindowOwnerName") != owner:
+                continue
+            return int(w["kCGWindowNumber"]), int(w["kCGWindowOwnerPID"])
         time.sleep(0.2)
     return None
+
+
+def _window_id(title, deadline_s=20.0):
+    found = _find_window(title=title, deadline_s=deadline_s)
+    return None if found is None else found[0]
 
 
 def _page_fraction(png):
@@ -263,3 +275,49 @@ def test_a_window_opened_under_a_cover_paints_its_page(tmp_path):
     # The instrument can read blank: without the fix the covered window is one flat frame.
     assert blank < 0.05, f"calibration: the unfixed covered window should be blank, read {blank:.0%} page"
     assert painted > 0.5, f"the covered window with the fix should hold its page, read {painted:.0%} page"
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin" or os.environ.get("DIVOOM_WINDOW_TESTS") != "1",
+    reason="opens real windows and captures them: set DIVOOM_WINDOW_TESTS=1 in a logged-in macOS session",
+)
+def test_installed_app_open_g_paints_without_foregrounding(tmp_path):
+    """DV.BGLAUNCH launch path: `open -g /Applications/Divoom.app` paints its UI/previews
+    without foregrounding Divoom, even when covered."""
+    import signal
+
+    import AppKit
+    from PIL import Image
+
+    app = Path("/Applications/Divoom.app")
+    if not app.exists():
+        pytest.skip(f"{app} is not installed")
+    if _find_window(title="Divoom Control Center", owner="Divoom Control", deadline_s=0.3) is not None:
+        pytest.skip("Divoom Control Center is already open; refusing to close the user's window")
+
+    ws = AppKit.NSWorkspace.sharedWorkspace()
+    cover = subprocess.Popen([sys.executable, "-c", _COVER, "18"], stdin=subprocess.DEVNULL)
+    pid = None
+    try:
+        time.sleep(1.0)
+        subprocess.run(["open", "-g", str(app)], check=True, stdin=subprocess.DEVNULL)
+        found = _find_window(title="Divoom Control Center", owner="Divoom Control", deadline_s=20.0)
+        assert found is not None, "Divoom Control Center window did not appear after `open -g`"
+        wid, pid = found
+        front = ws.frontmostApplication()
+        assert front is None or front.bundleIdentifier() != "com.divoom.control", (
+            f"`open -g` foregrounded Divoom ({front.bundleIdentifier()})"
+        )
+        time.sleep(3.0)
+        assert cover.poll() is None, "the cover ended before capture"
+        png = tmp_path / "divoom_open_g.png"
+        subprocess.run(["screencapture", "-x", "-o", "-l", str(wid), str(png)], check=True, stdin=subprocess.DEVNULL)
+        cols = Image.open(png).convert("RGB").getcolors(maxcolors=200000)
+        distinct = 200000 if cols is None else len(cols)
+        assert distinct > 500, f"`open -g` window painted only {distinct} distinct colors (blank/black frame)"
+    finally:
+        if pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGTERM)
+        cover.terminate()
+        cover.wait(timeout=10)
