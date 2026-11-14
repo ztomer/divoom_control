@@ -234,7 +234,7 @@ window.DivoomTemplates.settings = `                <!-- R15 §1+§7: tab chrome 
                             </div>
                             <div class="card-body">
                                 <div class="tabs-row theme-buttons" role="tablist" aria-label="Theme">
-                                    <button class="tab-btn theme-mode-btn active" data-theme="dark" role="tab" aria-selected="true" title="Dark Mode">
+                                    <button class="tab-btn theme-mode-btn" data-theme="dark" role="tab" aria-selected="false" title="Dark Mode">
                                         <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
                                             <path d="M12,2 C10,2 6,4 6,9 C6,13 9,14 12,14 C6,16 2,12 2,8 C2,4 6,2 12,2 Z" fill="currentColor"/>
                                         </svg>
@@ -247,7 +247,7 @@ window.DivoomTemplates.settings = `                <!-- R15 §1+§7: tab chrome 
                                         </svg>
                                         Light
                                     </button>
-                                    <button class="tab-btn theme-mode-btn" data-theme="system" role="tab" aria-selected="false" title="System Auto">
+                                    <button class="tab-btn theme-mode-btn active" data-theme="system" role="tab" aria-selected="true" title="System Auto">
                                         <svg class="kare-icon tab-icon" viewBox="0 0 16 16" aria-hidden="true">
                                             <rect x="1" y="2" width="14" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
                                             <rect x="6" y="12" width="4" height="2"/>

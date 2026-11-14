@@ -181,13 +181,6 @@ body.theme-light .arranger-node-image {
     filter: grayscale(100%) contrast(300%) brightness(95%) !important;
 }
 
-@media (prefers-color-scheme: light) {
-    body.theme-system .banner-preview img,
-    body.theme-system .arranger-node-image {
-        filter: grayscale(100%) contrast(300%) brightness(95%) !important;
-    }
-}
-
 /* ── Ambient Mode Grid Previews ── */
 .ambient-preview {
     transition: background-color 0.3s;

@@ -86,8 +86,12 @@
     --panel-gap:      12px;  /* general spacing between blocks inside a .tab-content */
 }
 
-/* ── Light Mode Redefinitions ── */
+/* ── Light Mode Redefinitions ──
+   The ONE light rule set. "System" is not a class: theme_boot.js resolves it to theme-light or
+   theme-dark from the appearance and follows it live (DV.WEBUILIGHT), so no stylesheet
+   keeps a second copy of these rules for it. */
 body.theme-light {
+    color-scheme: light;
     --bg-base: #f4f4f6;
     --card-bg: #ffffff;
     --sidebar-bg: #e8e9eb;
@@ -114,36 +118,6 @@ body.theme-light {
     --surface-sunken: #e8e9eb;
 }
 
-/* ── System Auto Mode Mapping ── */
-@media (prefers-color-scheme: light) {
-    body.theme-system {
-        --bg-base: #f4f4f6;
-        --card-bg: #ffffff;
-        --sidebar-bg: #e8e9eb;
-        --legend-bg: #e8e9eb;
-        --input-bg: #fdfdfe;
-        --input-border: #8b909a;
-        --win-appbar-bg: rgba(240, 241, 245, 0.95);
-        
-        --border-color: #d8dae0;
-        --border-hover: #e04e17;
-        
-        --primary: #ff5a1f;
-        --primary-glow: rgba(255, 90, 31, 0.12);
-        --secondary: #82838a;
-        --secondary-glow: rgba(130, 131, 138, 0.12);
-        --accent: #00a854;
-        
-        --text-main: #1c1d21;
-        --text-muted: #62636a;
-        --primary-text: #c2410c;
-        --warn-text: #8a6100;
-        --info-text: #1d63c4;
-        --surface-raised: #ffffff;
-        --surface-sunken: #e8e9eb;
-    }
-}
-
 * {
     box-sizing: border-box;
     margin: 0;
@@ -151,6 +125,7 @@ body.theme-light {
 }
 
 body {
+    color-scheme: dark; /* native controls and scrollbars follow the drawn theme */
     background-color: var(--bg-base);
     color: var(--text-main);
     font-family: var(--font-sans);
@@ -293,3 +268,18 @@ button {
     background: rgba(255, 255, 255, 0.05);
 }
 
+
+/* A colour well draws its own edge (DV.WEBUILIGHT): the clock's default white sat on the light
+   theme's white card with nothing around it, and a black well vanishes on the dark one. The edge
+   is the theme's input border, so the well reads whatever colour it holds. */
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+}
+input[type="color"]::-moz-color-swatch {
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+}

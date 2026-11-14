@@ -110,7 +110,7 @@ async def test_every_label_and_switch_reads_at_3_to_1(theme):
         try:
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
             await add_init_js(
-                page, _MOCK_API + f"\ntry {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (e) {{}}\n"
+                page, _MOCK_API + f"\ntry {{ localStorage.setItem('divoom-theme', '{theme}'); }} catch (e) {{}}\n"
             )
             await page.goto(f"file://{INDEX_HTML}")
             await wait_js(page, "() => !!window.DivoomState")
@@ -167,7 +167,7 @@ async def test_the_bench_reads_at_3_to_1_in_every_state(theme, state):
     topology = "null" if state == "loading" else json.dumps({"rooms": ["Desk"], "wall_linked": True, "devices": {}})
     init = (
         _FLEET_API.replace("%PANELS%", json.dumps(panels)).replace("%TOPOLOGY%", topology)
-        + f"\ntry {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (e) {{}}\n"
+        + f"\ntry {{ localStorage.setItem('divoom-theme', '{theme}'); }} catch (e) {{}}\n"
     )
     if state == "loading":
         init = init.replace(

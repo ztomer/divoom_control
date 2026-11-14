@@ -296,15 +296,6 @@ body.theme-light #widget-device-select {
   color: #1c1d21 !important;
 }
 
-@media (prefers-color-scheme: light) {
-    body.theme-system #gallery-device-select,
-    body.theme-system #widget-device-select {
-      background: rgba(0, 0, 0, 0.05) !important;
-      border: 1px solid rgba(0, 0, 0, 0.1) !important;
-      color: #1c1d21 !important;
-    }
-}
-
 /* R14 §3 — macOS notification mirroring card.
    The status pill lives in the card header; the rules editor lives
    in a <details> body (collapsed by default to keep the card tidy). */

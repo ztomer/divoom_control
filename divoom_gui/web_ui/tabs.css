@@ -130,9 +130,3 @@ body.theme-light .tabs-row {
 body.theme-light .tabs-row .tab-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
-body.theme-system .tabs-row {
-  background: rgba(0, 0, 0, 0.04);
-}
-body.theme-system .tabs-row .tab-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-}

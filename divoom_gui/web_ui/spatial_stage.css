@@ -62,15 +62,6 @@ body.theme-light {
     --node-border: #b9bcc6;
     --node-shadow: rgba(0, 0, 0, 0.18);
 }
-@media (prefers-color-scheme: light) {
-    body.theme-system {
-        --bench-dot: #d2d4da;
-        --node-top: #ffffff;
-        --node-bottom: #eceef2;
-        --node-border: #b9bcc6;
-        --node-shadow: rgba(0, 0, 0, 0.18);
-    }
-}
 
 /* 2D Freeform Bench Canvas */
 .spatial-bench {

@@ -133,30 +133,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── 2. THEME SELECTOR WIRING (R15 §1+§7: `.theme-mode-btn` keeps its name but is also a `.tab-btn`) ──
     const themeButtons = document.querySelectorAll(".theme-mode-btn");
     
-    function applyTheme(theme) {
-        document.body.classList.remove("theme-dark", "theme-light", "theme-system");
-        document.body.classList.add(`theme-${theme}`);
-        
+    // The choice and what it draws live in theme_boot.js (DV.WEBUILIGHT); the buttons show the choice.
+    function showChoice() {
+        const choice = window.DivoomTheme ? window.DivoomTheme.choice() : "system";
         themeButtons.forEach(btn => {
-            if (btn.getAttribute("data-theme") === theme) {
-                btn.classList.add("active");
-            } else {
-                btn.classList.remove("active");
-            }
+            const on = btn.getAttribute("data-theme") === choice;
+            btn.classList.toggle("active", on);
+            btn.setAttribute("aria-selected", on ? "true" : "false");
         });
-        
-        localStorage.setItem("aesthetic-theme", theme);
     }
-    
+
     themeButtons.forEach(btn => {
         btn.addEventListener("click", () => {
-            const selectedTheme = btn.getAttribute("data-theme");
-            applyTheme(selectedTheme);
+            window.DivoomTheme?.choose(btn.getAttribute("data-theme"));
         });
     });
-    
-    const savedTheme = localStorage.getItem("aesthetic-theme") || "dark";
-    applyTheme(savedTheme);
+    document.addEventListener("divoom:theme", showChoice);
+    showChoice();
 
     // ── 3. BLUETOOTH SCREEN SCANNER UI ──
     const scanBtn = document.getElementById("scan-btn");

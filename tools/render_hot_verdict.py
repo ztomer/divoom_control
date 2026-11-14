@@ -106,7 +106,7 @@ async def _render(theme: str, out: Path) -> list[str]:
             page = await context.new_page()
             await add_init_js(page, MOCK_API)
             await add_init_js(
-                page, "try { localStorage.setItem('aesthetic-theme', %s); } catch (_) {}" % json.dumps(theme)
+                page, "try { localStorage.setItem('divoom-theme', %s); } catch (_) {}" % json.dumps(theme)
             )
             await page.goto(f"file://{INDEX_HTML}")
             await wait_js(page, "() => !!window.HotVerdict && !!window.SpatialStage && !!window.Divoom?.onOwnedDevices")

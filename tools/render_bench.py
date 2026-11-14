@@ -101,7 +101,7 @@ async def _render(theme: str, out: Path, sock: str) -> None:
             await add_init_js(
                 page, MOCK.replace("%PANELS%", json.dumps(panels)).replace("%TOPOLOGY%", json.dumps(topology))
             )
-            await add_init_js(page, f"try {{ localStorage.setItem('aesthetic-theme', '{theme}'); }} catch (_) {{}}")
+            await add_init_js(page, f"try {{ localStorage.setItem('divoom-theme', '{theme}'); }} catch (_) {{}}")
             await page.goto(f"file://{INDEX_HTML}")
             await wait_js(page, "() => !!window.Divoom?.onOwnedDevices && !!window.SpatialRooms?.isLoaded()")
             await eval_js(page, "(d) => window.Divoom.onOwnedDevices({type: 'owned_devices', devices: d})", owned)
