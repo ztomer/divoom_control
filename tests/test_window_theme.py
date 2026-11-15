@@ -53,6 +53,14 @@ def test_the_choice_round_trips_and_absent_means_the_page_decides(tmp_path):
     assert window_theme.read_choice(cfg) == "system"
 
 
+def test_the_config_path_follows_home_at_call_time(tmp_path, monkeypatch):
+    """A harness that points `Path.home()` at a temp dir never reaches the real config.ini."""
+    monkeypatch.setattr(window_theme.Path, "home", lambda: tmp_path)
+    assert window_theme.write_choice("light")
+    assert (tmp_path / ".config" / "divoom-control" / "config.ini").is_file()
+    assert window_theme.read_choice() == "light"
+
+
 @pytest.mark.parametrize(
     ("choice", "system_light", "want"),
     [

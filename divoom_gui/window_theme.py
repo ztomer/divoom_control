@@ -32,7 +32,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-CONFIG_FILE = Path.home() / ".config" / "divoom-control" / "config.ini"
+
+def config_file() -> Path:
+    """Resolved at call time, so a test that points `Path.home()` at a temp dir (the bridge
+    harness does) never reaches the real config."""
+    return Path.home() / ".config" / "divoom-control" / "config.ini"
+
+
 SECTION = "gui"
 KEY = "theme"
 CHOICES = ("dark", "light", "system")
@@ -44,9 +50,10 @@ _AQUA = "NSAppearanceNameAqua"
 _DARK_AQUA = "NSAppearanceNameDarkAqua"
 
 
-def read_choice(path: Path = CONFIG_FILE) -> str | None:
+def read_choice(path: Path | None = None) -> str | None:
     """The stored choice, or None when none was ever stored (the page's own store then
     decides, and reports it back). Never raises."""
+    path = path or config_file()
     try:
         if path.exists():
             cfg = configparser.ConfigParser()
@@ -59,10 +66,11 @@ def read_choice(path: Path = CONFIG_FILE) -> str | None:
     return None
 
 
-def write_choice(choice: str, path: Path = CONFIG_FILE) -> bool:
+def write_choice(choice: str, path: Path | None = None) -> bool:
     """Persist the choice. Returns True on success; an unknown choice is refused."""
     if choice not in CHOICES:
         return False
+    path = path or config_file()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         cfg = configparser.ConfigParser()

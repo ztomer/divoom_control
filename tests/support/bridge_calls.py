@@ -43,6 +43,7 @@ NOT_CALLED = {
 #: An argument for a parameter with no default, by name.
 ARGS = {
     "mac": A,
+    "choice": "light",
     "address": A,
     "enable": True,
     "enabled": True,
