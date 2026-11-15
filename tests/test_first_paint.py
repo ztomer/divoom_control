@@ -300,7 +300,9 @@ def test_installed_app_open_g_paints_without_foregrounding(tmp_path):
     pid = None
     try:
         time.sleep(1.0)
-        subprocess.run(["open", "-g", str(app)], check=True, stdin=subprocess.DEVNULL)
+        # `env -i`: the launch a user's Dock or Finder makes (launchd's login environment), not the
+        # test runner's (GOH.CLEANOPEN: `open` hands the app the caller's environment).
+        subprocess.run(["env", "-i", "/usr/bin/open", "-g", str(app)], check=True, stdin=subprocess.DEVNULL)
         found = _find_window(title="Divoom Control Center", owner="Divoom Control", deadline_s=20.0)
         assert found is not None, "Divoom Control Center window did not appear after `open -g`"
         wid, pid = found

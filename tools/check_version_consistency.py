@@ -66,7 +66,7 @@ def newest_tag_version() -> str | None:
     """Newest vX.Y.Z tag, or None when the repo has no tags."""
     try:
         out = subprocess.run(
-            ["git", "-C", str(REPO), "tag", "--list", "v*", "--sort=-v:refname"],
+            ["git", "--no-optional-locks", "-C", str(REPO), "tag", "--list", "v*", "--sort=-v:refname"],
             capture_output=True,
             text=True,
             timeout=15,

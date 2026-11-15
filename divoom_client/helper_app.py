@@ -65,9 +65,12 @@ def open_command(bundle: Path, args: list[str], env: dict[str, str], log_path: s
     ``-n``: always a NEW instance, so a relaunch or a reinstall starts the
     binary now on disk; the helper's own single-instance rule decides what
     happens to an older one (the menubar's newest wins, the daemon's socket
-    lock refuses a second). ``-g``: never take focus.
+    lock refuses a second). ``-g``: never take focus. ``env -i``: ``open`` hands
+    the app the CALLER's environment, so it is run with none and the app gets
+    launchd's login environment plus exactly the ``--env`` pairs below, the
+    helper's own (GOH.CLEANOPEN).
     """
-    cmd = ["/usr/bin/open", "-n", "-g", "-a", str(bundle)]
+    cmd = ["/usr/bin/env", "-i", "/usr/bin/open", "-n", "-g", "-a", str(bundle)]
     for k, v in sorted(passed_env(env).items()):
         cmd += ["--env", f"{k}={v}"]
     if log_path:

@@ -101,7 +101,7 @@ def test_open_starts_a_new_background_instance_with_the_helpers_env():
         },
         "/tmp/log",
     )
-    assert cmd[:5] == ["/usr/bin/open", "-n", "-g", "-a", "/A.app/Contents/Helpers/divoomd.app"]
+    assert cmd[:7] == ["/usr/bin/env", "-i", "/usr/bin/open", "-n", "-g", "-a", "/A.app/Contents/Helpers/divoomd.app"]
     assert cmd[cmd.index("--args") + 1 :] == ["--socket", "/tmp/s"]
     envs = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--env"]
     assert envs == ["DIVOOM_X=1", "RUST_LOG=info"], "the launcher's own identity is not handed on"
@@ -144,7 +144,15 @@ def test_the_menubar_helper_app_is_opened_not_forked(tmp_path, monkeypatch):
     menubar_agent._spawn_menubar_agent(lambda name: None)
     assert len(rec.calls) == 1, rec.calls
     cmd = rec.calls[0]
-    assert cmd[:5] == ["/usr/bin/open", "-n", "-g", "-a", str((app / "Contents/Helpers/Divoom Menubar.app").resolve())]
+    assert cmd[:7] == [
+        "/usr/bin/env",
+        "-i",
+        "/usr/bin/open",
+        "-n",
+        "-g",
+        "-a",
+        str((app / "Contents/Helpers/Divoom Menubar.app").resolve()),
+    ]
     assert any(a.startswith("DIVOOM_GUI_PYTHON=") for a in cmd), cmd
 
 
@@ -211,7 +219,15 @@ def test_a_detached_daemon_helper_app_is_opened_not_forked(tmp_path, monkeypatch
     monkeypatch.setattr(subprocess, "run", rec)
     assert daemon_client.spawn_daemon(DEFAULT_SOCKET_PATH, detach=True) == 5151
     cmd = rec.calls[0]
-    assert cmd[:5] == ["/usr/bin/open", "-n", "-g", "-a", str((app / "Contents/Helpers/divoomd.app").resolve())]
+    assert cmd[:7] == [
+        "/usr/bin/env",
+        "-i",
+        "/usr/bin/open",
+        "-n",
+        "-g",
+        "-a",
+        str((app / "Contents/Helpers/divoomd.app").resolve()),
+    ]
     assert cmd[cmd.index("--args") + 1 :] == ["--socket", DEFAULT_SOCKET_PATH]
     assert "DIVOOM_LINKS_RESTORE=1" in cmd
 
