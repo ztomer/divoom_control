@@ -251,3 +251,9 @@ GOH_PY_RUNNER="python$(tr -d '[:space:]' <.python-version) -m"
 
 # Roadmap file the goh roadmap gate checks (GOH.ROADMAPREQ).
 GOH_ROADMAP=docs/ROADMAP.md
+
+# Every scanner's floor, at nine tenths of what it read at GOH_GRACE=over
+# on 2026-11-15 (GOH.FLOORREQ; required from 2026-11-23, GOH.GRACEEND).
+GOH_BARE_OPEN_MIN_FILES=576
+GOH_GIT_DEADLINE_MIN_FILES=229
+GOH_WORKFLOW_PINS_MIN_REFS=6

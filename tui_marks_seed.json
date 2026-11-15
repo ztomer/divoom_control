@@ -1,0 +1,103 @@
+{
+  "why": "goh tui-marks (GOH.TUIMARKS, 2026-11-15): a shell echo/printf or Python print whose text opens with a Kare mark, where tui/lib.sh / tui.lib print it. Keyed by root commit; judged from 2026-11-23 (crate::grace). At or under its count warns; over it, unseeded, or stale is red. Done is an empty list.",
+  "entries": [
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/ble_free_after.sh",
+      "count": 1,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 27; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/build_release.sh",
+      "count": 11,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 65, 68, 70, 74, 78, 90, 105, 116, 121, 137, 145; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/check_linux_all_features.sh",
+      "count": 5,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 44, 45, 46, 84, 87; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/check_linux_build.sh",
+      "count": 3,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 28, 29, 51; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/ci_local.sh",
+      "count": 1,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 33; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/install_local.sh",
+      "count": 4,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 33, 34, 35, 36; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/lib/platform_gate.sh",
+      "count": 4,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 51, 59, 70, 76; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/make_helper_apps.sh",
+      "count": 2,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 36, 62; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/release.sh",
+      "count": 15,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 63, 66, 80, 87, 93, 125, 132, 134, 167, 169, 172, 177, ...; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "scripts/stop_helpers.sh",
+      "count": 2,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 37, 38; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "tools/_empty_scope.py",
+      "count": 1,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 31; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "tools/check_applescript_launch.py",
+      "count": 2,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 214, 221; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "tools/check_cargo_features.py",
+      "count": 6,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 294, 329, 333, 352, 372, 379; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    },
+    {
+      "root": "474da023a227f6568de70d887cdcdddd9a35f013",
+      "repo": "divoom-control",
+      "path": "tools/check_hw_verify_methods.py",
+      "count": 1,
+      "reason": "unreviewed: hand-rolled TUI mark at line(s) 149; print through tui/lib.sh or tui.lib (GOH.TUIMARKS seed, 2026-11-15)"
+    }
+  ]
+}

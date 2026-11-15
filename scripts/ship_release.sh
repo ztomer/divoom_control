@@ -38,7 +38,7 @@ SUMMARY="${GOH_SHIP_SUMMARY:-}"
 
 [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] \
   || die "release refused: HEAD is not the branch main -- a release is cut from main; nothing changed"
-[ -z "$(git status --porcelain --untracked-files=no)" ] \
+[ -z "$(GIT_OPTIONAL_LOCKS=0 git status --porcelain --untracked-files=no)" ] \
   || die "release refused: uncommitted tracked changes -- the release commit would carry them; nothing changed"
 
 # Whether any `## Unreleased` section of CHANGELOG.md holds a non-blank line.

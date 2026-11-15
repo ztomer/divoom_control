@@ -89,7 +89,7 @@ echo "→ release ${TAG}  (repo ${REPO}, tap ${TAP})"
 # ── preflight ───────────────────────────────────────────────────────────────
 command -v gh >/dev/null || { echo "ERROR: gh CLI required (brew install gh)" >&2; exit 1; }
 gh auth status >/dev/null 2>&1 || { echo "ERROR: gh not authenticated — run: gh auth login" >&2; exit 1; }
-if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+if [ -n "$(GIT_OPTIONAL_LOCKS=0 git status --porcelain --untracked-files=no)" ]; then
   echo "⚠ working tree has uncommitted TRACKED changes — the tag will point at HEAD," >&2
   echo "  which does not include them. Commit or stash first, or press Ctrl-C." >&2
   sleep 3
