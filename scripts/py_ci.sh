@@ -137,9 +137,16 @@ trap restore_ble_free EXIT
 info "cargo build -p divoomd --locked (the daemon the spawning tests run)"
 cargo build -p divoomd --locked
 
-info "pytest (coverage floor ${COV_MIN}% over divoom_gui + divoom_client;" \
+# Both suites run across pytest-xdist workers (CIP.DIVOOMCONTROL, 2026-11-15): serial, this
+# step was 327 s of a 953 s push gate on one core. Measured back to back at load ~87: serial
+# 461 s, -n 8 72 s, both 2506 passed / 239 skipped, coverage 92.02% serial against 92.00%
+# (pytest-cov combines the workers' data; the floor below binds either way).
+# DIVOOM_PY_WORKERS sets the count, as DIVOOM_BROWSER_WORKERS does for the browser suites;
+# 0 runs in-process. tests/test_py_ci_parallel.py holds the flag here.
+workers="${DIVOOM_PY_WORKERS:-8}"
+info "pytest -n ${workers} (coverage floor ${COV_MIN}% over divoom_gui + divoom_client;" \
     "browser suites run in scripts/browser_e2e.sh, a GOH_CI_STEPS step)"
-python3 -m pytest -q \
+python3 -m pytest -q -n "$workers" \
     --cov=divoom_gui --cov=divoom_client \
     --cov-report=term-missing:skip-covered \
     --cov-precision="$COV_PRECISION" \
@@ -150,5 +157,5 @@ python3 -m pytest -q \
 # product runs that code -- but it stays green: it is the executable spec the
 # device_call parity and positional-args gates read their signatures from.
 info "pytest examples/tests (the retired library, standalone)"
-python3 -m pytest examples/tests -q -p no:cacheprovider
+python3 -m pytest examples/tests -q -p no:cacheprovider -n "$workers"
 ok "legacy suite green"

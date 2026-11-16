@@ -6,6 +6,8 @@ shipped milestone (per the project planning docs).
 
 ## Unreleased
 
+- **The Python suites run eight-wide in the push gate (CIP.DIVOOMCONTROL).** Profiled at load 66-97 on 16 cores, the full push gate took 953 s and `scripts/py_ci.sh` was its largest step at 327 s, both suites on one core. Both now run under pytest-xdist (`-n 8`, `DIVOOM_PY_WORKERS` to change it, as `DIVOOM_BROWSER_WORKERS` does for the browser suites). Back to back at load ~87: main suite 461 s serial, 72 s parallel, both 2506 passed / 239 skipped, coverage 92.02% against 92.00% (floor 89.0 unchanged); examples suite 45 s -> 25 s at 1577 / 58. Pinned by `tests/test_py_ci_parallel.py`.
+
 ## v0.45.12 — a Light launch opens on a light window, not a dark frame; the window is created in the chosen theme
 
 - **A Light launch no longer opens on a dark frame (DV.WINBG).** A 30 fps capture of the installed 0.45.11 (Light chosen, Dark appearance) showed 14 frames of (10, 11, 16), gui_main's hard-coded window `background_color="#0a0b10"`, then one of WKWebView's own dark backdrop, before the page's first light frame: the choice lived only in the page's localStorage, which the native side cannot read before the page runs. The choice is now also kept in `config.ini` `[gui] theme` (the page reports it through `set_theme_choice`), and `divoom_gui/window_theme.py` reads it before the window exists: the window is created in that theme's `--bg-base`, its NSWindow takes the choice's appearance (so WebKit's backdrop agrees) and a dynamic background that follows the appearance for Auto, and the page gets the same choice as `?theme=`. Re-captured from source: no dark frame in Light, no light frame in Dark. Pinned by `tests/test_window_theme.py`.
