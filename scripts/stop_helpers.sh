@@ -100,7 +100,7 @@ for identity in "$RUN_DIR"/*.pid; do
     fi
     # `ps` pads the column, so both ends are trimmed: the recorded value was
     # trimmed the same way when it was written.
-    live=$(LC_ALL=C /bin/ps -p "$pid" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    live=$(env LC_ALL=C /bin/ps -p "$pid" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
     if [ -z "$live" ]; then
         info "[helpers] $(basename "$identity"): pid $pid is gone — removing the identity"
         rm -f "$identity"
