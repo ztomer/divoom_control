@@ -165,7 +165,10 @@ async fn a_dropped_panel_keeps_a_new_job_waiting_for_its_link() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_mcp_client_gets_the_code_beside_the_prose() {
-    let path = std::env::temp_dir().join(format!("divoomd_p58_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_p58_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let d = daemon_with(&[LINKED]).await;
     let listener = Arc::new(UnixListener::bind(&path).expect("bind"));

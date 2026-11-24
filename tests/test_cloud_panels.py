@@ -28,20 +28,20 @@ from __future__ import annotations
 import json
 import os
 import socket
-import tempfile
 import threading
 import uuid
 
 import pytest
 
 from divoom_client.daemon_protocol import DaemonClient
+from divoom_client.socket_path import scratch_socket_path
 
 
 class StubDaemon:
     def __init__(self, reply: dict):
         self.reply = reply
         self.requests: list[dict] = []
-        self.path = os.path.join(tempfile.gettempdir(), f"divoom_panel_{uuid.uuid4().hex[:8]}.sock")
+        self.path = scratch_socket_path(f"divoom_panel_{uuid.uuid4().hex[:8]}.sock")
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(self.path)
         self._srv.listen(8)

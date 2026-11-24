@@ -22,7 +22,10 @@ const MAC: &str = "NOTIFY_A";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_notification_shows_for_its_duration_then_the_widget_returns() {
-    let path = std::env::temp_dir().join(format!("divoomd_notify_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_notify_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let d = Arc::new(Daemon::new());
     d.initialize_self_weak(Arc::downgrade(&d));

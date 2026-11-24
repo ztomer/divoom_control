@@ -68,7 +68,10 @@ async fn an_unknown_command_and_a_bad_line_have_codes() {
     let d = Daemon::new();
     assert_code(&ask(&d, "frobnicate", json!({})).await, "unknown_command");
 
-    let path = std::env::temp_dir().join(format!("divoomd_codes_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_codes_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let listener = Arc::new(UnixListener::bind(&path).expect("bind"));
     tokio::spawn(serve(
@@ -119,7 +122,10 @@ async fn a_failed_write_reaches_mcp_and_the_cli_as_its_class() {
     use divoomd::daemon_target::DaemonTarget;
     use divoomd::mcp_tools::call_tool;
 
-    let path = std::env::temp_dir().join(format!("divoomd_p510_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_p510_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let d = Arc::new(Daemon::new());
     d.initialize_self_weak(Arc::downgrade(&d));

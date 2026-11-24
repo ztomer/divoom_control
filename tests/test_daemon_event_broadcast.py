@@ -14,7 +14,6 @@ from __future__ import annotations
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -26,6 +25,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from divoom_client.daemon_protocol import DaemonClient  # noqa: E402
+from divoom_client.socket_path import scratch_socket_dir  # noqa: E402
 
 # Resolved centrally: `target/release` is stale unless a release was just
 # cut, and preferring it silently tested old code. See tests/support/daemon_binary.py
@@ -83,7 +83,7 @@ def mock_daemon():
     # daemon refuses to unlink one of those on purpose: it may be data someone
     # cares about, and guessing wrong is unrecoverable. That refusal is correct
     # behaviour; handing it a pre-made file was the test's mistake.
-    tmpdir = tempfile.mkdtemp(prefix="divoomd_events_")
+    tmpdir = scratch_socket_dir("divoomd_events_")
     path = Path(tmpdir) / "daemon.sock"
     proc = subprocess.Popen(
         [str(_DIVOOMD), "--socket", str(path)],

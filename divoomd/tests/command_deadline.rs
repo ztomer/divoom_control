@@ -42,7 +42,10 @@ impl Handler for Stalls {
 }
 
 fn start(name: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("divoomd_{name}_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_{name}_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let listener = Arc::new(UnixListener::bind(&path).expect("bind"));
     tokio::spawn(serve(

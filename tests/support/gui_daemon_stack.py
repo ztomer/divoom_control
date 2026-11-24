@@ -39,8 +39,10 @@ shared one path and a single leak made the next test collide with it.
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -63,6 +65,12 @@ def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _signal_group(proc: subprocess.Popen, sig: int) -> None:
+    """Send `sig` to the process group `proc` leads; quiet when it is gone."""
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(proc.pid, sig)
 
 
 class IsolatedStack:
@@ -115,6 +123,8 @@ class IsolatedStack:
             stderr=subprocess.PIPE,
             text=True,
             stdin=subprocess.DEVNULL,
+            # Its own process group, so close() reaches what it forks.
+            start_new_session=True,
         )
         self._wait_for_socket(self.socket_path, socket_timeout)
 
@@ -133,6 +143,8 @@ class IsolatedStack:
             stderr=subprocess.PIPE,
             text=True,
             stdin=subprocess.DEVNULL,
+            # Its own process group, so close() reaches what it forks.
+            start_new_session=True,
         )
         self._wait_for_http(self.bridge_port, http_timeout)
 
@@ -209,21 +221,24 @@ class IsolatedStack:
             return
         self._closed = True
 
+        # Signal each process GROUP (each child leads its own session), not
+        # only the pid: a daemon that forked -- a shell stub's `sleep`, the
+        # real divoomd's SPP helper -- otherwise outlives it, orphaned to
+        # launchd (five per run, found by the push gate, DV.SOCKETFLAKE).
         procs = [p for p in (self.bridge_proc, self.daemon_proc) if p is not None]
         for proc in procs:
-            try:
-                proc.terminate()
-            except OSError:
-                pass
+            _signal_group(proc, signal.SIGTERM)
         for proc in procs:
             try:
                 proc.wait(timeout=3.0)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                try:
-                    proc.wait(timeout=2.0)
-                except Exception:
-                    pass
+                pass
+            except Exception:
+                pass
+            # The leader may be gone with members left; KILL whatever remains.
+            _signal_group(proc, signal.SIGKILL)
+            try:
+                proc.wait(timeout=2.0)
             except Exception:
                 pass
 

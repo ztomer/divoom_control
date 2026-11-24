@@ -143,6 +143,7 @@ pub mod secret_store;
 pub mod settings_devices;
 pub mod socket_bind;
 pub mod socket_owner;
+pub mod socket_path;
 pub mod socket_server;
 pub mod spp;
 pub mod spp_bridge_protocol;

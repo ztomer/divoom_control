@@ -45,7 +45,11 @@ impl Handler for Echo {
 
 fn temp_sock(tag: &str) -> std::path::PathBuf {
     // short path (macOS unix-socket paths are limited to ~104 bytes)
-    std::env::temp_dir().join(format!("divoomd_{}_{}.sock", tag, std::process::id()))
+    divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_{}_{}.sock",
+        tag,
+        std::process::id()
+    ))
 }
 
 async fn read_one_line(stream: &mut UnixStream) -> Vec<u8> {

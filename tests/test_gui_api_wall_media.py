@@ -198,14 +198,21 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         from that attempt and failed with "another divoomd is already
         listening". The machine's state is not this test's subject.
         """
-        import tempfile
+        import shutil
 
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ, {"DIVOOM_SOCKET": os.path.join(tmp, "absent.sock")}):
-                with patch.object(type(self.api), "_client", lambda self: None):
-                    prev = json.loads(self.api.get_system_stats_preview(16))
-                    self.assertFalse(prev["ok"])
-                    self.assertIn("background service", prev["error"])
+        from divoom_client.socket_path import scratch_socket_dir
+
+        sock_dir = scratch_socket_dir("dv-wm-")
+        try:
+            with (
+                patch.dict(os.environ, {"DIVOOM_SOCKET": os.path.join(sock_dir, "absent.sock")}),
+                patch.object(type(self.api), "_client", lambda self: None),
+            ):
+                prev = json.loads(self.api.get_system_stats_preview(16))
+                self.assertFalse(prev["ok"])
+                self.assertIn("background service", prev["error"])
+        finally:
+            shutil.rmtree(sock_dir, ignore_errors=True)
 
     def test_unreachable_daemon_gets_a_sentence_not_an_errno(self):
         """`[Errno 2] No such file or directory` in a widget card is noise.
@@ -232,10 +239,11 @@ class TestGuiApiWallMedia(GuiApiTestBase):
         silently falls back to the generic message, exactly when the specific
         one would help most.
         """
-        import tempfile
         from pathlib import Path as _P
 
-        sock = _P(tempfile.mkdtemp()) / "custom.sock"
+        from divoom_client.socket_path import scratch_socket_dir
+
+        sock = _P(scratch_socket_dir("dv-wm-")) / "custom.sock"
         sock.with_suffix(".sock.failure").write_text(
             "reason: /tmp/custom.sock is a regular file, not a socket\n"
             "remedy: Move or delete that file yourself, then start the daemon again.\n"

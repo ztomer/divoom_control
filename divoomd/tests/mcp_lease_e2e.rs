@@ -284,7 +284,10 @@ async fn assert_widget_frame_back(d: &Daemon, drawn_at: usize) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_agent_leases_draws_and_a_lapsed_lease_hands_the_panel_back() {
-    let path = std::env::temp_dir().join(format!("divoomd_mcp_lease_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_mcp_lease_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let d = Arc::new(Daemon::new());
     d.initialize_self_weak(Arc::downgrade(&d));

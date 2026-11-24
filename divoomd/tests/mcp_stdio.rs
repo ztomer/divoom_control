@@ -29,8 +29,9 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const V042_TOOLS: &str = include_str!("fixtures/mcp_tools_list_v0.42.json");
 
 fn scratch(name: &str) -> PathBuf {
-    // Short: a unix socket path is capped at 104 bytes on macOS.
-    let dir = std::env::temp_dir().join(format!("dvmcp-{name}-{}", std::process::id()));
+    // A unix socket path is capped at 104 bytes on macOS, whatever TMPDIR is.
+    let dir =
+        divoomd::socket_path::scratch_socket_dir(&format!("dvmcp-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("scratch dir");
     dir

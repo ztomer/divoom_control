@@ -58,7 +58,10 @@ fn a_heartbeat_that_never_beats_is_declared_wedged_within_the_bound() {
 
 #[test]
 fn a_wedged_serving_loop_is_detected_and_a_healthy_idle_one_is_not() {
-    let path = std::env::temp_dir().join(format!("divoomd_wedge_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_wedge_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()

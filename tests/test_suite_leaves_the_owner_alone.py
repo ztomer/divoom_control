@@ -17,10 +17,10 @@ from __future__ import annotations
 import os
 import pwd
 import subprocess as sp
-import tempfile
 import time
 from pathlib import Path
 
+from divoom_client.socket_path import scratch_socket_dir
 from tests.support.daemon_binary import require_divoomd
 
 REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
@@ -55,7 +55,7 @@ def test_a_daemon_a_test_spawns_writes_only_the_tests_home():
 
     require_divoomd()
     before = _mtimes(OWNER_STATE)
-    sock = os.path.join(tempfile.mkdtemp(prefix="divoom-own-"), "d.sock")
+    sock = os.path.join(scratch_socket_dir("divoom-own-"), "d.sock")
     handle = spawn_daemon(sock)
     try:
         deadline = time.monotonic() + 15.0

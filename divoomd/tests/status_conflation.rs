@@ -46,7 +46,10 @@ const UPDATES: u64 = 400;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_stalled_reader_catches_up_to_the_latest_value_of_every_key() {
-    let path = std::env::temp_dir().join(format!("divoomd_conflate_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_conflate_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let bus = Events::new(divoomd::events::RING);
     let listener = Arc::new(UnixListener::bind(&path).expect("bind"));

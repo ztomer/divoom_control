@@ -28,6 +28,7 @@ from pathlib import Path
 
 import pytest
 
+from divoom_client.socket_path import scratch_socket_dir
 from tests.support.daemon_binary import require_divoomd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -131,7 +132,6 @@ def live_daemon(tmp_path):
     device op holding the mutex cannot make a live daemon look dead). Asking it
     once and concluding "never bound" is how this fixture first failed.
     """
-    import tempfile
     import time
 
     from divoom_client.daemon_client import DaemonClient, daemon_alive, spawn_daemon
@@ -140,8 +140,8 @@ def live_daemon(tmp_path):
     # NOT tmp_path: pytest's base is already ~120 characters and a Unix socket
     # path is capped at 104 bytes (sun_path), so the daemon fails to bind and
     # the fixture reports "never bound" — which is what the first draft did.
-    # The whole path has to stay short, so the directory is in /tmp too.
-    sock_dir = tempfile.mkdtemp(prefix="divoom-mcp-")
+    # `scratch_socket_dir` keeps it short whatever TMPDIR is (DV.SOCKETFLAKE).
+    sock_dir = scratch_socket_dir("divoom-mcp-")
     socket_path = os.path.join(sock_dir, "d.sock")
     assert len(socket_path) < 104, f"socket path too long to bind: {socket_path}"
     handle = spawn_daemon(socket_path)

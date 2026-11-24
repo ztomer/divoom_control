@@ -16,12 +16,12 @@ import json
 import os
 import subprocess as sp
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 import pytest
 
+from divoom_client.socket_path import scratch_socket_dir
 from divoom_lib.cli_preview import ENTRY_KEYS, collect
 from tests.support.daemon_binary import require_divoomd
 
@@ -44,7 +44,7 @@ def live_daemon(settings):
     from divoom_client.daemon_client import DaemonClient, daemon_alive, spawn_daemon
 
     require_divoomd()
-    sock_dir = tempfile.mkdtemp(prefix="divoom-prev-")
+    sock_dir = scratch_socket_dir("divoom-prev-")
     socket_path = os.path.join(sock_dir, "d.sock")
     handle = spawn_daemon(socket_path)
     try:

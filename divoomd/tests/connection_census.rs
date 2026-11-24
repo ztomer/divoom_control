@@ -23,7 +23,10 @@ use ndjson::next_line;
 const LINE: Duration = Duration::from_secs(5);
 
 fn temp_sock(name: &str) -> std::path::PathBuf {
-    let p = std::env::temp_dir().join(format!("divoomd_{name}_{}.sock", std::process::id()));
+    let p = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_{name}_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&p);
     p
 }

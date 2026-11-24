@@ -82,6 +82,21 @@ def test_a_binary_too_old_for_the_flag_is_killed_and_reports_no_version(tmp_path
     assert binary_resolver.binary_version(b, timeout=1.0) is None
 
 
+def test_a_hung_probe_takes_its_own_children_with_it(tmp_path):
+    """The kill on timeout reaches the probe's whole process group.
+
+    `subprocess.run` kills only the pid it started; a binary that forked (a
+    shell wrapper, a daemon's helper) left that child running, which the push
+    gate's orphan canary caught (DV.SOCKETFLAKE).
+    """
+    from tests.support.grandchild import assert_gone, stub_with_grandchild
+
+    pidfile = tmp_path / "child.pid"
+    b = stub_with_grandchild(tmp_path / "divoomd", pidfile)
+    assert binary_resolver.binary_version(b, timeout=1.0) is None
+    assert_gone(pidfile, "a hung --version probe")
+
+
 def test_the_probe_never_touches_the_default_socket(tmp_path):
     """A hung probe is SIGKILLed, so it cannot clean up after itself.
 

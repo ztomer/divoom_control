@@ -33,13 +33,17 @@ newest-by-mtime — the old behaviour, kept deliberately for exactly that case.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
+
+from divoom_client.socket_path import scratch_socket_dir
 
 logger = logging.getLogger("divoom_client.binary_resolver")
 
@@ -86,22 +90,13 @@ def binary_version(path: Path, timeout: float = PROBE_TIMEOUT) -> str | None:
     exactly that: the gate caught it on the first run after the flag landed.
     """
     extra = ["--socket", "<probe>"] if path.name == "divoomd" else []
-    with tempfile.TemporaryDirectory(prefix="divoomd_version_probe_") as tmp:
+    tmp = scratch_socket_dir("dv-probe-")
+    try:
         if extra:
             extra[1] = str(Path(tmp) / "probe.sock")
         try:
-            proc = subprocess.run(
-                [str(path), "--version", *extra],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                stdin=subprocess.DEVNULL,
-                check=False,
-            )
+            returncode, stdout = _run_reaping_group([str(path), "--version", *extra], timeout)
         except subprocess.TimeoutExpired:
-            # subprocess.run kills the child on timeout, but a daemon spawned
-            # with setsid would survive; divoomd does not do that to itself, so
-            # the kill is sufficient here.
             logger.warning(
                 "%s did not answer --version within %.1fs — too old to have the flag, so it is stale by definition",
                 path,
@@ -111,11 +106,38 @@ def binary_version(path: Path, timeout: float = PROBE_TIMEOUT) -> str | None:
         except OSError as e:
             logger.warning("cannot execute %s: %s", path, e)
             return None
-    if proc.returncode != 0:
-        logger.warning("%s --version exited %s", path, proc.returncode)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    if returncode != 0:
+        logger.warning("%s --version exited %s", path, returncode)
         return None
-    m = _VERSION_LINE.match((proc.stdout or "").strip())
+    m = _VERSION_LINE.match((stdout or "").strip())
     return m.group(1) if m else None
+
+
+def _run_reaping_group(argv: list[str], timeout: float) -> tuple[int, str]:
+    """Run `argv` in its own process group; on timeout KILL the whole group.
+
+    `subprocess.run` kills only the pid it started, so a binary that forked (a
+    shell wrapper, a daemon's helper) left its child running, orphaned to
+    launchd (DV.SOCKETFLAKE). Raises `TimeoutExpired` after the group is gone.
+    """
+    proc = subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        stdout, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
+        raise
+    return proc.returncode, stdout
 
 
 def _expected_version() -> str | None:

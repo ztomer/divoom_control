@@ -20,6 +20,7 @@ funnel calls `close()` without proving `close()` reaps anything.
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import stat
 import time
@@ -27,6 +28,7 @@ from pathlib import Path
 
 import pytest
 
+from divoom_client.socket_path import scratch_socket_dir
 from tests.support.gui_daemon_stack import IsolatedStack
 
 
@@ -113,7 +115,10 @@ def test_bridge_that_never_binds_leaves_no_daemon_behind(tmp_path, monkeypatch):
     startup lock, so leaking it is what poisoned every following test.
     """
     stack_mod = pytest.importorskip("tests.support.gui_daemon_stack")
-    sock = tmp_path / "d.sock"
+    # Not tmp_path: pytest's base is past sun_path, and a stub that cannot bind
+    # exits at once, leaving no daemon for this test to catch leaking.
+    sock_dir = Path(scratch_socket_dir("dv-td-"))
+    sock = sock_dir / "d.sock"
     # Binds the socket so bring-up gets past _wait_for_socket, then idles.
     daemon = _script(
         tmp_path / "divoomd",
@@ -129,8 +134,11 @@ def test_bridge_that_never_binds_leaves_no_daemon_behind(tmp_path, monkeypatch):
     with pytest.raises(BaseException):
         IsolatedStack(daemon, http_timeout=0.5, bridge_script=bridge)
 
-    assert len(pids) == 2, f"expected daemon + bridge, got {pids}"
-    _assert_all_dead(pids, "bridge that never bound")
+    try:
+        assert len(pids) == 2, f"expected daemon + bridge, got {pids}"
+        _assert_all_dead(pids, "bridge that never bound")
+    finally:
+        shutil.rmtree(sock_dir, ignore_errors=True)
 
 
 def test_daemon_that_exits_immediately_is_reaped(tmp_path, monkeypatch):
@@ -219,3 +227,23 @@ def test_two_stacks_do_not_share_a_socket_path(tmp_path, monkeypatch):
     paths = [s.split()[-1] for s in seen if "never bound" in s]
     assert len(paths) == 2, seen
     assert paths[0] != paths[1], f"both stacks used {paths[0]}"
+
+
+def test_a_daemons_own_child_is_reaped_too(tmp_path, monkeypatch):
+    """`close()` reaps the daemon's process GROUP, not only its pid.
+
+    Each stub above is `sh` running `sleep 30`: terminating the `sh` left the
+    `sleep` orphaned, five per run, and the recorded-pid check above could not
+    see them (the push gate's orphan canary did, DV.SOCKETFLAKE). A real
+    divoomd forks too (`spp.rs` starts a Python helper).
+    """
+    from tests.support.grandchild import assert_gone, stub_with_grandchild
+
+    pidfile = tmp_path / "child.pid"
+    daemon = stub_with_grandchild(tmp_path / "divoomd", pidfile)
+    _capture_pids(monkeypatch)
+
+    with pytest.raises(pytest.fail.Exception, match="never bound"):
+        IsolatedStack(daemon, socket_timeout=1.0)
+
+    assert_gone(pidfile, "a daemon that never bound")

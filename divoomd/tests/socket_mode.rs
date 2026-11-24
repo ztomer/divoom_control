@@ -31,10 +31,12 @@ impl Drop for Umask {
 
 #[test]
 fn the_socket_is_owner_only_under_a_wide_open_umask() {
-    let path = std::env::temp_dir()
-        .join(format!("divoomd_mode_{}.sock", std::process::id()))
-        .to_string_lossy()
-        .into_owned();
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_mode_{}.sock",
+        std::process::id()
+    ))
+    .to_string_lossy()
+    .into_owned();
     let clean = |p: &str| {
         let _ = std::fs::remove_file(p);
         let _ = std::fs::remove_file(divoomd::socket_bind::lock_path(p));

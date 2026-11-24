@@ -52,7 +52,10 @@ async fn subscribe(path: &std::path::Path, client_id: Option<&str>) -> (UnixStre
 
 #[tokio::test]
 async fn a_named_reconnect_takes_its_slot_back_from_a_full_registry() {
-    let path = std::env::temp_dir().join(format!("divoomd_takeover_{}.sock", std::process::id()));
+    let path = divoomd::socket_path::scratch_socket_path(&format!(
+        "divoomd_takeover_{}.sock",
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&path);
     let (tx, _) = broadcast::channel(8);
     let listener = Arc::new(UnixListener::bind(&path).expect("bind"));

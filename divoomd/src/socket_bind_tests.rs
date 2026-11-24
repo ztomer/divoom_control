@@ -13,9 +13,9 @@ use std::sync::Arc;
 pub(super) fn tmp_path(tag: &str) -> String {
     // Per-process: two test binaries (or a CI step and a stray run) sharing
     // one path saw each other's lock as StartupInProgress (flaked once,
-    // 2026-09-12).
-    std::env::temp_dir()
-        .join(format!("divoomd_bind_{}_{tag}.sock", std::process::id()))
+    // 2026-09-12). Short enough for `sun_path` under any TMPDIR (DV.SOCKETFLAKE).
+    let name = format!("divoomd_bind_{}_{tag}.sock", std::process::id());
+    crate::socket_path::scratch_socket_path(&name)
         .to_string_lossy()
         .into_owned()
 }
@@ -242,7 +242,8 @@ fn rejects_an_over_long_path_with_the_limit() {
 
 #[test]
 fn creates_a_missing_parent_directory() {
-    let dir = std::env::temp_dir().join("divoomd_bind_parent_test");
+    let name = format!("divoomd_bind_parent_{}", std::process::id());
+    let dir = crate::socket_path::scratch_socket_dir(&name);
     let _ = std::fs::remove_dir_all(&dir);
     let p = dir.join("d.sock").to_string_lossy().into_owned();
 

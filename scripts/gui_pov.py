@@ -48,6 +48,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from divoom_client.socket_path import scratch_socket_dir
 from divoom_lib.utils.plural import counted
 
 REPO = Path(__file__).resolve().parent.parent
@@ -128,7 +129,8 @@ class Stack:
         # A directory plus a name that does not exist yet. NamedTemporaryFile
         # would CREATE a regular file, and the daemon refuses to unlink one of
         # those by design.
-        self.dir = tempfile.mkdtemp(prefix="divoom_pov_")
+        # `scratch_socket_dir`: sun_path is 104 bytes, whatever TMPDIR is.
+        self.dir = scratch_socket_dir("divoom_pov_")
         self.socket_path = str(Path(self.dir) / "daemon.sock")
         self.home = tempfile.mkdtemp(prefix="divoom_pov_home_")
         self.port = _free_port()
