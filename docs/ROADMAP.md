@@ -32,7 +32,7 @@ was re-read against that tree in the 2026-11-08 rework (owner: "rework,
 rephase, harden the roadmaps"); its commit lists what was pruned and why.
 
 **Umbrella queue ids** (`~/Projects/ROADMAP-consolidated.md`) that map here:
-D3 -> P5.16; OW.89 -> P6.1 and P6.2; OW.46 -> P4.8;
+D3 -> P5.16; OW.89 -> P6.1;
 RS.DV -> P1.25; WG.5 (under WG.7) -> P9.12; WG.LIGHTDARK -> P9.13. Each entry
 also names its queue id as `(queue: <ID>)`.
 
@@ -135,8 +135,8 @@ moves the active panel and a row renames over the socket, and two captures
 show the check and the name change in the open menu with no close/reopen,
 light and dark; or the defects found are filed.
 
-#### P6.1 — Snap adjacent panels into one surface: the hardware check (queue: OW.89)
-**Status:** DECISION (owner, OW.89 open)
+#### P6.1 — Snap adjacent panels into one surface: the hardware check
+**Status:** BLOCKED (on the owner's measurements M1-M5, a ruler and a photograph of the proving pair)
 **Why:** council 2026-11-07, `docs/council-p6.md` (the facts, five personas,
 the measurements and decisions 1-4). The daemon's cut is exact in PIXELS
 (2026-10-20, Pixoo-1 + Timoo-light-4, 0 of 256 off per half), but the glass
@@ -151,34 +151,11 @@ pictures on a physical canvas cut at each SCREEN rectangle, pixel art only
 across equal pitches, still images only until drift is measured, a dropped
 panel marked and re-sent on relink. Before any code, the owner measures M1
 (each family's screen rectangle, a ruler) and M2-M5 on the proving pair.
-**Done when:** (owner to decide) -- OW.89, decisions 1-4 of
-`docs/council-p6.md`, is undecided. The council's proposed exit, for the owner
-to accept or replace: M1 recorded there, the screen rectangle in `FAMILIES`,
-the free-form cut using it (a test watched red on today's chassis cut), and a
-photograph of the proving pair showing one picture across the seam (M5).
-
-#### P6.2 — A panel on Wi-Fi as a wall slot (queue: OW.89)
-**Status:** DECISION (owner, OW.89 open)
-**Why:** council 2026-11-07, `docs/council-p6.md` (decisions 5-6). The
-premise this row carried until today was false: the Timoo and the Tivoo-Max
-are Bluetooth-architecture models, not Wi-Fi ones -- the vendor app puts only
-the Pixoo64Wifi family, Pixoo16Wifi, Lcd5Wifi and the photo frames on its
-Wi-Fi architecture, and the daemon's own table agrees
-(`divoomd/src/panel_features.rs`: no `WIFI` on `TIMOO` or `TivooMax`). No
-panel in the house can be a Wi-Fi slot. The app's upload is known
-(`Draw/PixelLocalHttp`, multipart to `:9000/upload`, needs a cloud-bound
-device, its `LocalToken` and an encoder for the app's art format that
-`divoomd/src/art_codec.rs` lacks); the daemon's LAN transport
-(`divoomd/src/device_call/lan.rs`) has no image command, and the refusal now
-says exactly that (`divoomd/src/wall/refusal.rs`). Recommended: "Not planned"
-until a Wi-Fi panel is in the house (a Pixoo-64 would also serve P4.8); with
-one, probe both routes read-only, draw on it alone, then admit it as a still
-slot.
-**Done when:** (owner to decide) -- OW.89, decisions 5-6 of
-`docs/council-p6.md`, is undecided (acquire a Wi-Fi panel, or this row is
-deleted as not planned). With a panel, the council's proposed exit: a Wi-Fi
-image command draws on it, the daemon draws a slot over it, and the refusal in
-`divoomd/src/wall/refusal.rs` is deleted.
+**Done when:** the owner's ruling of 2026-11-17 on `docs/council-p6.md` decisions 1-4 is built: "one surface" means both, by art
+kind (pictures on a physical canvas cut at each SCREEN rectangle, pixel art only across equal pitches); still images only until
+drift is measured; a dropped panel keeps a marked hole and is re-sent on relink; the proving pair is the Tivoo-Max and the Pixoo.
+Exit: M1 recorded there, the screen rectangle in `FAMILIES`, the free-form cut using it (a test watched red on today's chassis
+cut), and a photograph of the proving pair showing one picture across the seam (M5).
 
 #### P5.14 — One hot-channel pipeline? (U.5 follow-up)
 **Status:** DECISION (owner)
@@ -192,26 +169,6 @@ panel's Hot pull, or the stored Recommend push) or kept both, recorded here
 with the date.
 
 ### Stage 3 — hardware-gated (a panel, a capture, or a trace)
-
-#### P4.8 — Phase 4's hardware half: a 64x64 Bluetooth panel runs the lease (queue: OW.46)
-**Status:** BLOCKED (on a 64x64 panel linked over Bluetooth or SPP; the bench's four are 16x16)
-**Why:** Phase 4's exit is green against the real `divoomd mcp` entry point
-with a mock 64x64 panel (`divoomd/tests/mcp_lease_e2e.rs` decodes the 0x8B
-stream: two 4096-pixel frames, red then blue, then the widget's own 64x64
-frame after the lapse). A REAL 64x64 panel has never drawn a full-resolution
-multi-frame image through this path. The owner's step is one command:
-`scripts/hw_verify.py --only mcp_lease` with a 64x64 panel selected
-(`scripts/hw_mcp_lease.py`; it ends UNKNOWN, never PASS, when nobody looked:
-`tests/test_hw_mcp_lease.py`). Two things the run settles besides the glass:
-(1) the panel must be on Bluetooth or SPP -- a Wi-Fi-only Pixoo-64 cannot run
-it until P6.2's LAN image command exists, and the check SKIPs saying so; (2)
-the one-`AA`-frame 4096-pixel encoding the daemon streams has never been
-accepted by a 64x64 panel (the cloud's own 64x64 art is the tiled magic-26
-format, `divoomd/src/art_codec/iframe.rs`), so a panel that shows nothing is
-that finding, not the lease's.
-**Done when:** `scripts/hw_verify.py --only mcp_lease` on a Bluetooth-linked
-64x64 panel records PASS and a camera frame shows the multi-frame draw; or
-this item records why no 64x64 Bluetooth panel is in view.
 
 #### P9.1 — `search_weather_city` fails server-side
 **Status:** BLOCKED (on a capture of the official app's city search)

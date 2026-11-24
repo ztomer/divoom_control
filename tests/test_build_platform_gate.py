@@ -8,7 +8,7 @@ This gate was this repo's reference implementation and then lost its home.
 `scripts/build_libdivoom.sh` carried it inline and this file drove it; the C
 encoder chain went (`9a1cade`, 2026-09-25) and took both with it, so every
 build/install entry point was back to checking `uname -s` alone and an x86_64 Mac
-built and shipped a bundle nobody had run (ROADMAP P1.6).
+built and shipped a bundle nobody had run (landed in f89bf75).
 
 The check lives once now, in `scripts/lib/platform_gate.sh`, and each entry point
 calls it with the policy it needs:

@@ -365,7 +365,7 @@ async fn on_channel(d: &Daemon, channel: u8) {
 
 /// A lease on a panel with no live widget gives back the firmware channel
 /// it found -- where re-selecting that channel puts the same screen back
-/// (ROADMAP P9.7, photographed on a Ditoo 2026-11-01): the clock (0) and
+/// (answered and landed in f8fc03e, photographed on a Ditoo 2026-11-01): the clock (0) and
 /// the cloud channel (2) come back as they were; a re-selected channel 5
 /// shows the custom GALLERY, not the image that was pushed, so a lease that
 /// found a pushed image restores nothing and says so; and re-selecting the

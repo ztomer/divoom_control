@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make_helper_apps.sh — wrap the app's long-lived helpers in helper app bundles.
 #
-# D.HELPER (ROADMAP P1.18, 2026-11-02). A helper the app STARTS stays tied to
+# D.HELPER (landed in 80119dc, 2026-11-02). A helper the app STARTS stays tied to
 # the app's LaunchServices record for as long as it lives, and the record is
 # keyed by the app's pid: the next AppKit process to draw that pid after the
 # app quits is bound to the dead record and exits 1 (D.CFXSBX). Measured on

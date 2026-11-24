@@ -176,7 +176,7 @@ Done in this commit.
 BLOCKED "on a LAN panel bound to the account" with the two candidates named,
 and neither candidate can ever be one (F9). An item that waits on an
 impossibility is a decision dressed as a blocker. *Fix:* owner decision 5;
-until then the row states the true blocker. *Where:* `docs/ROADMAP.md` P6.2.
+until then the row states the true blocker. *Where:* P6.2, ruled "Not planned" by the owner on 2026-11-17 (OW.89 decision 5) and deleted from `docs/ROADMAP.md` with that ruling.
 
 ### Kare
 
@@ -319,8 +319,8 @@ any image code.
 
 ## 5. Withdrawn or revised claims
 
-- "The Timoo and the Tivoo-Max are the Wi-Fi models" (ROADMAP P6.2, 2026-11-07
-  rework): WITHDRAWN, F9.
+- "The Timoo and the Tivoo-Max are the Wi-Fi models" (P6.2 as of 2026-11-07, since ruled Not planned
+  and deleted from the roadmap): WITHDRAWN, F9.
 - "Measured 21 bench px" for the Pixoo + Timoo seam: REVISED — derived from
   the chassis table, not photographed (F3).
 - The refusal's "the Wi-Fi image upload ... is not known": WITHDRAWN, F8/F10.

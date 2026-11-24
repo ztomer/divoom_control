@@ -135,7 +135,7 @@ frame up for good. A lease is the borrow with the return built in:
   result's JSON is `{"error": "...", "code": "..."}`, and the CLI prints
   `<message> [<code>]`. Branch on the code, never on the wording; a code's
   meaning never changes once shipped. The daemon cannot send a failure
-  without one (`divoomd/src/error_code.rs`; ROADMAP P5.10).
+  without one (`divoomd/src/error_code.rs`; landed in 3459280).
 
 <!-- error-codes:start -->
 | Code | Meaning | What a client can do |

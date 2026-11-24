@@ -1,6 +1,6 @@
 """Start a long-lived helper as an app of its own, through LaunchServices.
 
-D.HELPER (ROADMAP P1.18, 2026-11-02). The app's helpers (`divoomd`,
+D.HELPER (landed in 80119dc, 2026-11-02). The app's helpers (`divoomd`,
 `divoom-menubar`) are meant to outlive it (the tray, `keep_daemon_alive`).
 While a helper the app started is alive, launchservicesd keeps the QUIT app's
 record, keyed by its pid (`lsappinfo list`: ``(exited-with-subordinates)``),

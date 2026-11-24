@@ -17,7 +17,7 @@ test is the agent's path, not the socket's.
 **What it refuses to grade.** The exit is about a 64x64 panel, so a panel the
 daemon does not describe as 64x64 is a SKIP that says so -- never a PASS on a
 16x16 panel. A panel linked over Wi-Fi is a SKIP too, with its reason: the
-daemon has no image command on its LAN transport (ROADMAP P6.2), so neither
+daemon has no image command on its LAN transport (P6.2, ruled Not planned 2026-11-17), so neither
 the agent's draw nor the live widget can reach it, and a FAIL there would
 blame the panel for a gap in the daemon.
 
@@ -138,7 +138,7 @@ def precondition(status: dict) -> str:
     if status.get("lan_ip"):
         return (
             "the panel is linked over Wi-Fi, and the daemon has no image "
-            "command on its LAN transport (ROADMAP P6.2): neither the "
+            "command on its LAN transport (P6.2, ruled Not planned 2026-11-17): neither the "
             "agent's draw nor the live widget can reach it. Link a 64x64 "
             "panel over Bluetooth, or land P6.2 first"
         )
